@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         Названия треков в файл
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      0.1
 // @description  Экспорт названий треков в текстовый файл
 // @author       nikmedoed
 // @match        https://music.yandex.ru/album/*
 // @grant        GM_download
 // @grant        GM_registerMenuCommand
+// @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-collectTrackNames.user.js
+// @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-collectTrackNames.user.js
 // ==/UserScript==
+
 
 (function() {
     'use strict';

@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Закладки Яндекс.Карт в KML
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.1
 // @description  Скачать закладки из списка для использования в картографических приложениях
 // @author       http://t.me/nikmedoed
 // @match        http*://yandex.ru/maps/*
 // @grant        GM_registerMenuCommand
-// @downloadURL  https://gist.githubusercontent.com/nikmedoed/f704cbcca877720bba5f0467a748e061/raw/Yandex-maps_bookmarks_to_KML.user.js
-// @updateURL    https://gist.githubusercontent.com/nikmedoed/f704cbcca877720bba5f0467a748e061/raw/Yandex-maps_bookmarks_to_KML.user.js
+// @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex.map-bookmarks-to-KML.user.js
+// @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex.map-bookmarks-to-KML.user.js
 // ==/UserScript==
 
 
