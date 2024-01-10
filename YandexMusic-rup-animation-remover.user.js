@@ -1,12 +1,13 @@
 // ==UserScript==
-// @name         Названия треков в файл
-// @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  Экспорт названий треков в текстовый файл
+// @name         Yandex music rup animation remover
+// @namespace    https://github.com/nikmedoed/
+// @version      0.3
+// @description  Removes useless spinning animation
 // @author       nikmedoed
-// @match        https://music.yandex.ru/album/*
-// @grant        GM_download
-// @grant        GM_registerMenuCommand
+// @match        https://music.yandex.ru/home
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex%20music%20rup%20animation%20remover%20assets/Logo-sup-remover.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex%20music%20rup%20animation%20remover%20assets/Logo-sup-remover.png
+// @grant        none
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-rup-animation-remover.user.js
 // @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-rup-animation-remover.user.js
 // ==/UserScript==

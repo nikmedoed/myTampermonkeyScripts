@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Закладки Яндекс.Карт в KML
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.1
 // @description  Скачать закладки из списка для использования в картографических приложениях
 // @author       http://t.me/nikmedoed
 // @match        http*://yandex.ru/maps/*
