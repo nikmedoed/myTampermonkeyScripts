@@ -6,6 +6,8 @@
 // @author       http://t.me/nikmedoed
 // @match        http*://yandex.ru/maps/*
 // @grant        GM_registerMenuCommand
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/bookmarks-KML.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/bookmarks-KML.png
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex.map-bookmarks-to-KML.user.js
 // @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex.map-bookmarks-to-KML.user.js
 // ==/UserScript==

@@ -5,8 +5,8 @@
 // @description  Removes useless spinning animation
 // @author       nikmedoed
 // @match        https://music.yandex.ru/home
-// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex%20music%20rup%20animation%20remover%20assets/Logo-sup-remover.png
-// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/Yandex%20music%20rup%20animation%20remover%20assets/Logo-sup-remover.png
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/Logo-sup-remover.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/Logo-sup-remover.png
 // @grant        none
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-rup-animation-remover.user.js
 // @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-rup-animation-remover.user.js

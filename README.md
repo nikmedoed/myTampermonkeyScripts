@@ -1,6 +1,6 @@
 Несколько скриптов для регулярного решения специфичных задач.
 
-Для работы нужно расширение [Tampermonkey®](https://www.tampermonkey.net/).
+==Для работы нужно расширение [Tampermonkey®](https://www.tampermonkey.net/).==
 
 # Яндекс.Музыка
 

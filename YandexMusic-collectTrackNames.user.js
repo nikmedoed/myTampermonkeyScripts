@@ -2,9 +2,11 @@
 // @name         Названия треков в файл
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  Экспорт названий треков в текстовый файл
+// @description  Экспорт названий треков из плейлиста Яндекс.Музыки в текстовый файл
 // @author       nikmedoed
 // @match        https://music.yandex.ru/album/*
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/tracksToTXT.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/tracksToTXT.png
 // @grant        GM_download
 // @grant        GM_registerMenuCommand
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/YandexMusic-collectTrackNames.user.js
