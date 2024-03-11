@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Названия треков в файл
-// @namespace    http://tampermonkey.net/
-// @version      0.1
+// @namespace    https://github.com/nikmedoed
+// @version      0.2
 // @description  Экспорт названий треков из плейлиста Яндекс.Музыки в текстовый файл
 // @author       nikmedoed
 // @match        https://music.yandex.ru/album/*
@@ -35,7 +35,7 @@
         return albumTitle
     }
 
-    const TRACK_PATH = "body > div > div > div > div > div > section > div > div > div > div > div > div > div.d-track__name > a"
+    const TRACK_PATH = "div.page-album__tracks > div > div > div.d-track"
 
     function exportContent() {
         var collectedNames = [];
@@ -47,7 +47,7 @@
             elements[elements.length - 1].scrollIntoView();
 
             elements.forEach(element => {
-                newNames.push(element.textContent.trim());
+                newNames.push(element.querySelector('a').textContent.trim());
             });
 
             let lastCollectedName = collectedNames[ collectedNames.length - 1];
@@ -91,4 +91,32 @@
 
     // Call the function to add the download button to the page
     addDownloadButton();
+
+
+    function markTracksAsListened() {
+        var lastName = ""
+
+        function scrollAndCollect() {
+            var elements = document.querySelectorAll(TRACK_PATH);
+
+            let last = elements[ elements.length - 1].textContent
+            if (last == lastName){
+                return
+            }
+            lastName = last
+
+            elements.forEach(element => {
+                element.scrollIntoView();
+                element.querySelector('span.d-button').click()
+                document.querySelector("ul > li.d-context-menu__item.deco-popup-menu__item.d-context-menu__item_mark-finished")?.click()
+            });
+
+            setTimeout(scrollAndCollect, 3000);
+
+        }
+        scrollAndCollect()
+    }
+
+    GM_registerMenuCommand('Отметить все прослушанными', markTracksAsListened);
+
 })();
