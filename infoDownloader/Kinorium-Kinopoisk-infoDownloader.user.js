@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kinopoisk Info Downloader
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Download movie or series info
 // @author       nikmedoed
 // @match        https://www.kinopoisk.ru/film/*
@@ -14,37 +14,48 @@
 (function() {
     'use strict';
 
-    // Функция для создания и скачивания файла
     function download(filename, text) {
-        var element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-        element.setAttribute('download', filename + '.txt');
-        element.style.display = 'none';
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const element = document.createElement('a');
+        element.href = URL.createObjectURL(blob);
+        element.download = filename + '.txt';
         document.body.appendChild(element);
         element.click();
         document.body.removeChild(element);
     }
 
     function getInfo() {
-        var title= '', year = '', url = window.location.href;
-        if (url.includes('kinopoisk.ru')) {
-            var titleWithYearSpan = document.querySelector('div > h1[itemprop="name"] > span');
-            var fullText = titleWithYearSpan ? titleWithYearSpan.innerText : '';
+        var title = '', year = '', url = window.location.href, isSeries = false;
 
-            var yearSpan = document.querySelector('h1[itemprop="name"] > span:nth-of-type(2)');
-            if (yearSpan) {
-                var yearText = yearSpan.textContent.match(/\d{4}/);
-                if (yearText && yearText.length > 0) {
-                    year = yearText[0];
-                }
-                title = titleWithYearSpan.innerText;
-            } else {
-                var match = fullText.match(/\((\d{4})\)/);
-                if (match) {
-                    year = match[1];
-                    title = fullText.replace(/\(\d{4}\)/, '').trim();
-                } else {
-                    title = fullText;
+        if (url.includes('kinopoisk.ru')) {
+            const h1 = document.querySelector('h1[itemprop="name"]');
+            if (h1) {
+                const spans = h1.querySelectorAll('span[data-tid]');
+
+                if (spans.length > 1) {
+                    isSeries = true;
+                    title = spans[0].textContent.trim();
+                    const bracketsSpan = h1.querySelector('span.styles_brackets__zRUuj, span[class*="brackets"]');
+                    if (bracketsSpan) {
+                        const yearText = bracketsSpan.textContent;
+                        const yearMatch = yearText.match(/(\d{4})\s*–\s*(\d{4}|\?)/);
+                        if (yearMatch) {
+                            year = yearMatch[1];
+                        }
+                    }
+                } else if (spans.length === 1) {
+                    const fullText = spans[0].textContent.trim();
+                    const match = fullText.match(/(.+?)\s*\((\d{4})\)/);
+                    if (match) {
+                        title = match[1].trim();
+                        year = match[2];
+                    } else {
+                        title = fullText;
+                        const yearMatch = fullText.match(/\d{4}/);
+                        if (yearMatch) {
+                            year = yearMatch[0];
+                        }
+                    }
                 }
             }
         }
@@ -54,15 +65,27 @@
             if (yearMatch) {
                 year = yearMatch[0];
             }
+
+            if (document.querySelector("div > span > span > span.film-page__serial-label")) {
+                isSeries = true;
+            }
+            let watchButton = document.querySelector("button.setStatus.future.statusWidget");
+            if (watchButton) {
+                let isActive = watchButton.querySelector("div.active") !== null;
+                if (!isActive) {
+                    watchButton.click();
+                }
+            }
         }
 
-        return { title, year, url };
+        return { title, year, url, isSeries };
     }
 
-
-    function action(){
+    function action() {
         var info = getInfo();
-        download(info.title, `${info.title}\n${info.year}\n${info.url}`);
+        var type = info.isSeries ? 'Сериал' : 'Фильм';
+        var filename = `${type}_${info.title}`;
+        download(filename, `${info.title}\n${info.year}\n${info.url}\n${type}`);
     }
 
     function addButton(selector) {
@@ -77,7 +100,6 @@
         }
     }
 
-    // Добавляем кнопку при загрузке страницы
     window.addEventListener('load', function() {
         if (window.location.href.includes('kinopoisk.ru')) {
             addButton('div > h1[itemprop="name"]');
@@ -85,7 +107,6 @@
             addButton('.film-page__title-elements-wrap');
         }
     });
-
 
     GM_registerMenuCommand('Скачать информацию', action);
 })();

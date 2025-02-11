@@ -55,8 +55,9 @@
         // Обработка страницы отдельной игры
         const gamePage = document.querySelector('div.c-productHero_title');
         if (gamePage && !gamePage.querySelector('button')) {
-            const title = gamePage.querySelector('div')?.innerText.trim();
-            const year = extractDate(document.querySelector('div.g-text-xsmall > span.u-text-uppercase')?.innerText)
+            const titleElement = gamePage.querySelector('h1'); // Исправленный селектор
+            const title = titleElement ? titleElement.innerText.trim() : 'Unknown Title';
+            const year = extractDate(document.querySelector('div.g-text-xsmall > span.u-text-uppercase')?.innerText);
             addDownloadButton(gamePage, title, year);
         }
     }
