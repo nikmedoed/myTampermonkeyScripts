@@ -33,7 +33,9 @@
                         if (year) break
                     }
                 }
-                addDownloadButton(gameTitleElement.parentNode, title, year);
+                const div = gameTitleElement.parentNode
+                addDownloadButton(div, title, year);
+                addYouTubeButton(div, title);
             }
         }
     }
@@ -59,6 +61,7 @@
             const title = titleElement ? titleElement.innerText.trim() : 'Unknown Title';
             const year = extractDate(document.querySelector('div.g-text-xsmall > span.u-text-uppercase')?.innerText);
             addDownloadButton(gamePage, title, year);
+            addYouTubeButton(gamePage, title);
         }
     }
 
@@ -77,6 +80,25 @@
         if (match) return match[0];
         return 'Unknown';
     }
+
+    function addYouTubeButton(div, title) {
+        const youtubeButton = document.createElement('button');
+        youtubeButton.textContent = `Обзор на YouTube`;
+        youtubeButton.style.backgroundColor = 'red';
+        youtubeButton.style.color = 'white';
+        youtubeButton.style.padding = '10px 15px';
+        youtubeButton.style.border = 'none';
+        youtubeButton.style.borderRadius = '5px';
+        youtubeButton.style.cursor = 'pointer';
+        youtubeButton.style.marginLeft = '10px';
+
+        youtubeButton.addEventListener('click', () => {
+            window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(title + ' игра обзор')}`, '_blank');
+        });
+
+        div.appendChild(youtubeButton);
+    }
+
 
     function addDownloadButton(div, title, year) {
         const buttonText = `Скачать (${title || 'No Title'})`;
