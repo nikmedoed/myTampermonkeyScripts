@@ -1,37 +1,47 @@
-import pandas as pd
 import os
 import glob
 import sys
-
+from openpyxl import Workbook
 
 def create_excel_from_txt_files(directory):
-    files_pattern = os.path.join(directory, '*.txt')
-    files = glob.glob(files_pattern)
+    # Ищем все .txt-файлы в каталоге
+    pattern = os.path.join(directory, '*.txt')
+    files = glob.glob(pattern)
 
     data = []
     max_columns = 0
 
-    for file_name in files:
-        with open(file_name, 'r', encoding='utf-8') as file:
-            lines = file.read().splitlines()
-            max_columns = max(max_columns, len(lines))  # Определяем максимальное количество колонок
-            data.append(lines)
+    # Читаем строки из каждого файла
+    for file_path in files:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
+        data.append(lines)
+        if len(lines) > max_columns:
+            max_columns = len(lines)
 
-    # Выравниваем строки по максимальному количеству столбцов
-    for i in range(len(data)):
-        data[i] += [''] * (max_columns - len(data[i]))
+    # Добиваем до равной длины
+    for row in data:
+        row.extend([''] * (max_columns - len(row)))
 
-    # Генерируем названия колонок динамически
-    column_names = [f'Column {i + 1}' for i in range(max_columns)]
+    # Создаём книгу и лист
+    wb = Workbook()
+    ws = wb.active
 
-    df = pd.DataFrame(data, columns=column_names)
+    # Заголовки колонок
+    headers = [f'Column {i + 1}' for i in range(max_columns)]
+    ws.append(headers)
+
+    # Записываем данные
+    for row in data:
+        ws.append(row)
+
+    # Сохраняем файл
     output_file = os.path.join(directory, 'MoviesAndSeries.xlsx')
-    df.to_excel(output_file, index=False)
-
+    wb.save(output_file)
     return output_file
 
-
-# Если путь не предоставлен в аргументах, используется текущая рабочая директория
-directory_path = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-output = create_excel_from_txt_files(directory_path)
-print(f'The Excel file has been created: {output}')
+if __name__ == '__main__':
+    # Путь можно передать аргументом, иначе — текущий каталог
+    directory = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+    result = create_excel_from_txt_files(directory)
+    print(f'The Excel file has been created: {result}')
