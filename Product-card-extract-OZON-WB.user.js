@@ -201,6 +201,8 @@
         WILDBERRIES SECTION
   ========================================================= */
     function initWB() {
+        async function loadWBReviews(max = 100) {
+            const DELAY = 600, MAX_IDLE = 6;
             let idle = 0, prev = 0;
             while (true) {
                 const items = document.querySelectorAll('li.comments__item');
