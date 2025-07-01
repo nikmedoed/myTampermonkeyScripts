@@ -50,6 +50,28 @@
             }
         }
 
+        function clickVariantWhenReady(timeout = 5000) {
+            const findBtn = () =>
+                Array.from(document.querySelectorAll('button,[role="button"]'))
+                    .find((el) => /этот вариант товара/i.test(el.textContent?.trim()));
+
+            const btn = findBtn();
+            if (btn) { btn.click(); return Promise.resolve(true); }
+
+            return new Promise((resolve) => {
+                const obs = new MutationObserver(() => {
+                    const b = findBtn();
+                    if (b) {
+                        b.click();
+                        obs.disconnect();
+                        resolve(true);
+                    }
+                });
+                obs.observe(document.body, { childList: true, subtree: true });
+                setTimeout(() => { obs.disconnect(); resolve(false); }, timeout);
+            });
+        }
+
         /* ------- collect product info ------- */
         async function collectInfo() {
             const url = location.href;
@@ -110,12 +132,8 @@
 
             await smooth(hSpan);
 
-            const variantBtn = [...document.querySelectorAll('button, div')]
-            .find((el) => /этот вариант товара/i.test(el.textContent));
-            if (variantBtn) {
-                variantBtn.click();
-                await sleep(400);
-            }
+            await clickVariantWhenReady();
+            await sleep(600);
 
             const declared = parseInt(hSpan.parentElement.querySelector('span:not(:first-child)')?.innerText.replace(/\s+/g, '') || '0', 10) || 0;
             const avg = [...document.querySelectorAll('span')].find((s) => /\d+[.,]\d+\s*\/\s*5/.test(s.textContent.trim()))?.innerText.trim() || '—';
