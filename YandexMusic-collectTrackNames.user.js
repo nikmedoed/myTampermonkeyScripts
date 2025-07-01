@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name         Названия треков в файл
-// @namespace    https://github.com/nikmedoed
+// @namespace    https://nikmedoed.github.io
+// @author       http://t.me/nikmedoed
 // @version      0.3
 // @description  Экспорт названий треков из плейлиста Яндекс.Музыки в текстовый файл
 // @author       nikmedoed

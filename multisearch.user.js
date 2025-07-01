@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Мультипоиск
-// @namespace    http://tampermonkey.net/
+// @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
 // @description  Гибкая панель для повторного поиска на других сайтах.
 // @version      0.5.4

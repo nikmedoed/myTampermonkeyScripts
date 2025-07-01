@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name         YouTube Toolkit
-// @namespace    http://tampermonkey.net/
+// @namespace    https://nikmedoed.github.io
+// @author       http://t.me/nikmedoed
 // @version      0.1
 // @description  Набор инструментов для YouTube
 // @author       nikmedoed
