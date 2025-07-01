@@ -3,7 +3,7 @@
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
 // @description  Гибкая панель для повторного поиска на других сайтах.
-// @version      0.5.5
+// @version      0.5.6
 // @match        *://*/*
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
 // @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
@@ -16,7 +16,7 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-(() => {
+(function () {
     'use strict';
 
     /* ---------- 1. ДЕФОЛТНЫЕ САЙТЫ ---------- */
