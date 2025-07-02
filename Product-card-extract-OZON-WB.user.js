@@ -58,7 +58,7 @@
   ========================================================= */
     function initOzon() {
 
-        const clickVariantWhenReady = (timeout = 5000) => {
+        const clickVariantWhenReady = (timeout = 400) => {
             const find = () => [...document.querySelectorAll('button,[role="button"]')]
                 .find(el => /этот вариант товара/i.test(el.textContent?.trim()));
             const btn = find();
