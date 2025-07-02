@@ -5,6 +5,8 @@
 // @description  Гибкая панель для повторного поиска на других сайтах.
 // @version      0.5.4
 // @match        *://*/*
+// @sandbox      DOM
+// @run-at       document-idle
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
 // @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/multisearch.user.js
@@ -275,10 +277,16 @@
         document.body.appendChild(p);
     }
 
-    window.addEventListener('load', () => {
+    function init() {
         const cur = getCurrentSite();
         if (!cur || !isSearchContext(cur)) return;
         injectStyles(PANEL_CSS);
         buildPanel(cur);
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
