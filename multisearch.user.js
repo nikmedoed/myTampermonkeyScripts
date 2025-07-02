@@ -3,7 +3,7 @@
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
 // @description  Гибкая панель для повторного поиска на других сайтах.
-// @version      0.5.6
+// @version      0.5.7
 // @match        *://*/*
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
 // @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/multisearch.png
@@ -279,9 +279,17 @@
 
     function init() {
         const cur = getCurrentSite();
-        if (!cur || !isSearchContext(cur)) return;
-        injectStyles(PANEL_CSS);
-        buildPanel(cur);
+        if (!cur) return;
+        const check = () => {
+            if (isSearchContext(cur)) {
+                clearInterval(timer);
+                injectStyles(PANEL_CSS);
+                buildPanel(cur);
+            }
+        };
+        const timer = setInterval(check, 500);
+        check();
+        setTimeout(() => clearInterval(timer), 10000);
     }
 
     init();
