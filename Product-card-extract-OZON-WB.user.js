@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
-// @version      1.0.1
+// @version      1.0.2
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -165,6 +165,20 @@
                 return maybe || '—';
             };
             const getText = (n) => {
+                const findPart = (label) => {
+                    const h = [...n.querySelectorAll('div, span')]
+                        .find((el) => el.textContent.trim().toLowerCase() === label);
+                    return h ? h.parentElement.querySelector('span')?.innerText.trim() : '';
+                };
+                const pros = findPart('достоинства');
+                const cons = findPart('недостатки');
+                const comment = findPart('комментарий');
+                const parts = [];
+                if (pros) parts.push(`Достоинства: ${pros}`);
+                if (cons) parts.push(`Недостатки: ${cons}`);
+                if (comment) parts.push(`Комментарий: ${comment}`);
+                if (parts.length) return parts.join('; ');
+
                 const span = n.querySelector('span.ro5_30, span[class*="ro5_"]');
                 if (span) return span.innerText.trim();
                 const BAD = /Вам помог|Размер|Цвет|коммент|вопрос|ответ/i;
