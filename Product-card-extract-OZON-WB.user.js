@@ -154,7 +154,16 @@
             const nodes = [...document.querySelectorAll('[data-review-uuid]')].slice(0, max);
             const orange = 'rgb(255, 165, 0)';
             const starsCnt = (n) => [...n.querySelectorAll('svg')].filter((s) => s.style.color === orange).length || '—';
-            const getDate = (n) => n.querySelector('div.or4_30, div[class*="or4_"]')?.innerText.trim() || '—';
+            const getDate = (n) => {
+                const ts = n.getAttribute('publishedat');
+                if (ts && /^\d+$/.test(ts)) {
+                    return new Date(+ts * 1000).toLocaleDateString('ru-RU');
+                }
+                const maybe = [...n.querySelectorAll('div')]
+                    .map((el) => el.textContent.trim())
+                    .find((t) => /^\d{1,2}\s+\D+\s+\d{4}$/.test(t));
+                return maybe || '—';
+            };
             const getText = (n) => {
                 const span = n.querySelector('span.ro5_30, span[class*="ro5_"]');
                 if (span) return span.innerText.trim();
