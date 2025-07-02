@@ -29,48 +29,49 @@
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
 
+    const wait = async (sel, t = 8000, step = 200) => {
+        const start = Date.now();
+        while (Date.now() - start < t) {
+            const el = document.querySelector(sel);
+            if (el) return el;
+            await sleep(step);
+        }
+        return null;
+    };
+    const smooth = async el => {
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await sleep(400);
+    };
+    const createBtn = (node, fn) => {
+        if (!node || node.parentElement.querySelector('.mp-export-btn')) return;
+        const b = document.createElement('button');
+        b.textContent = 'Скачать';
+        b.className = 'mp-export-btn';
+        b.style.cssText = 'margin-left:8px;padding:4px 8px;font-size:14px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;';
+        b.addEventListener('click', fn);
+        node.insertAdjacentElement('afterend', b);
+    };
+
     /* =========================================================
         OZON SECTION
   ========================================================= */
     function initOzon() {
-        /* ---------- inner helpers ---------- */
-        async function wait(sel, timeout = 8e3) {
-            const t0 = Date.now();
-            while (Date.now() - t0 < timeout) {
-                const el = document.querySelector(sel);
-                if (el) return el;
-                await sleep(120);
-            }
-            return null;
-        }
-        async function smooth(el) {
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await sleep(400);
-            }
-        }
 
-        function clickVariantWhenReady(timeout = 5000) {
-            const findBtn = () =>
-                Array.from(document.querySelectorAll('button,[role="button"]'))
-                    .find((el) => /этот вариант товара/i.test(el.textContent?.trim()));
-
-            const btn = findBtn();
+        const clickVariantWhenReady = (timeout = 5000) => {
+            const find = () => [...document.querySelectorAll('button,[role="button"]')]
+                .find(el => /этот вариант товара/i.test(el.textContent?.trim()));
+            const btn = find();
             if (btn) { btn.click(); return Promise.resolve(true); }
-
-            return new Promise((resolve) => {
+            return new Promise(resolve => {
                 const obs = new MutationObserver(() => {
-                    const b = findBtn();
-                    if (b) {
-                        b.click();
-                        obs.disconnect();
-                        resolve(true);
-                    }
+                    const b = find();
+                    if (b) { b.click(); obs.disconnect(); resolve(true); }
                 });
                 obs.observe(document.body, { childList: true, subtree: true });
                 setTimeout(() => { obs.disconnect(); resolve(false); }, timeout);
             });
-        }
+        };
 
         /* ------- collect product info ------- */
         async function collectInfo() {
@@ -153,18 +154,40 @@
             const nodes = [...document.querySelectorAll('[data-review-uuid]')].slice(0, max);
             const orange = 'rgb(255, 165, 0)';
             const starsCnt = (n) => [...n.querySelectorAll('svg')].filter((s) => s.style.color === orange).length || '—';
-            const getDate = (n) => n.querySelector('div.or4_30, div[class*="or4_"]')?.innerText.trim() || '—';
-            const getText = (n) => {
-                const span = n.querySelector('span.ro5_30, span[class*="ro5_"]');
-                if (span) return span.innerText.trim();
+            const getDate = (n) => {
+                const ts = n.getAttribute('publishedat');
+                if (ts && /^\d+$/.test(ts)) {
+                    return new Date(+ts * 1000).toLocaleDateString('ru-RU');
+                }
+                const maybe = [...n.querySelectorAll('div')]
+                    .map((el) => el.textContent.trim())
+                    .find((t) => /^\d{1,2}\s+\D+\s+\d{4}$/.test(t));
+                return maybe || '—';
+            };
+            const parseText = (n) => {
+                const labels = ['Достоинства', 'Недостатки', 'Комментарий'];
+                const parts = [];
+                for (const lbl of labels) {
+                    const node = [...n.querySelectorAll('div, span')]
+                        .find((el) => el.textContent.trim() === lbl);
+                    if (node) {
+                        const row = node.closest('div');
+                        const span = row && row.querySelector('span');
+                        const val = span?.innerText.trim();
+                        if (val) parts.push(`${lbl}: ${val}`);
+                    }
+                }
+                if (parts.length) return parts.join('; ');
                 const BAD = /Вам помог|Размер|Цвет|коммент|вопрос|ответ/i;
-                const leaves = [...n.querySelectorAll('span, div, p')].filter((el) => !el.children.length && !BAD.test(el.innerText));
-                const texts = leaves.map((el) => el.innerText.trim()).filter((t) => t.length >= 10);
+                const texts = [...n.querySelectorAll('span, div, p')]
+                    .filter((el) => !el.children.length && !BAD.test(el.innerText))
+                    .map((el) => el.innerText.trim())
+                    .filter((t) => t.length >= 10);
                 texts.sort((a, b) => b.length - a.length);
                 return texts[0] || '—';
             };
 
-            const items = nodes.map((n, i) => `Отзыв ${i + 1} (${getDate(n)}): ${starsCnt(n)}★; ${getText(n).replace(/\s+/g, ' ')}`);
+            const items = nodes.map((n, i) => `Отзыв ${i + 1} (${getDate(n)}): ${starsCnt(n)}★; ${parseText(n).replace(/\s+/g, ' ')}`);
             const header = `Отзывы (выгружено ${items.length}${declared ? ` из ${declared}` : ''}, средняя оценка: ${avg})`;
             return { header, items };
         }
@@ -192,37 +215,14 @@
                 console.error('Ozon exporter:', err);
             }
         }
+        setInterval(() => createBtn(document.querySelector('[data-widget="webProductHeading"] h1'), exportOzon), 1000);
 
-        /* ------ button ------ */
-        function addBtn() {
-            const wrap = document.querySelector('[data-widget="webProductHeading"]');
-            if (!wrap || wrap.querySelector('.mp-export-btn')) return;
-            const h1 = wrap.querySelector('h1');
-            if (!h1) return;
-            const btn = document.createElement('button');
-            btn.textContent = 'Скачать';
-            btn.className = 'mp-export-btn';
-            btn.style.cssText = 'margin-left:8px;padding:4px 8px;font-size:14px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;';
-            btn.addEventListener('click', exportOzon);
-            h1.insertAdjacentElement('afterend', btn);
-        }
-        setInterval(addBtn, 1000);
     }
 
     /* =========================================================
         WILDBERRIES SECTION
   ========================================================= */
     function initWB() {
-        async function waitSel(sel, t = 8e3) {
-            const t0 = Date.now();
-            while (Date.now() - t0 < t) {
-                const el = document.querySelector(sel);
-                if (el) return el;
-                await sleep(200);
-            }
-            return null;
-        }
-
         async function loadWBReviews(max = 100) {
             const DELAY = 600, MAX_IDLE = 6;
             let idle = 0, prev = 0;
@@ -289,7 +289,7 @@
             const btn = header.querySelector('a.product-review');
             if (btn) {
                 btn.click();
-                await waitSel('.product-feedbacks__main', 10000);
+                await wait('.product-feedbacks__main', 10000);
                 await sleep(300);
                 const variant = [...document.querySelectorAll('.product-feedbacks__tabs .product-feedbacks__title')].find((el) => /этот вариант товара/i.test(el.innerText));
                 if (variant) { variant.click(); await sleep(300); }
@@ -320,20 +320,8 @@
             const fname = slug(brand + ' ' + title) + '.txt';
             GM_download({ url: 'data:text/plain;charset=utf-8,\uFEFF' + encodeURIComponent(txt), name: fname, saveAs: false });
         }
+        setInterval(() => createBtn(document.querySelector('.product-page__title'), exportWB), 1000);
 
-        function addBtn() {
-            const header = document.querySelector('.product-page__header-wrap');
-            if (!header || header.querySelector('.mp-export-btn')) return;
-            const titleEl = header.querySelector('.product-page__title');
-            if (!titleEl) return;
-            const btn = document.createElement('button');
-            btn.textContent = 'Скачать';
-            btn.className = 'mp-export-btn';
-            btn.style.cssText = 'margin-left:8px;padding:4px 8px;font-size:14px;background:#4caf50;color:#fff;border:none;border-radius:4px;cursor:pointer;';
-            btn.addEventListener('click', exportWB);
-            titleEl.insertAdjacentElement('afterend', btn);
-        }
-        setInterval(addBtn, 1000);
     }
 
     /* =========================================================
