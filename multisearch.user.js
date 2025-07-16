@@ -26,7 +26,7 @@
         { name:'YouTube',    url:'https://www.youtube.com/results?search_query=',   hosts:['youtube.com'],              searchPath:'^/results$',          queryParam:'search_query',searchInput:'',            icon:'youtube.com' },
         { name:'Ozon',       url:'https://www.ozon.ru/search/?text=',               hosts:['ozon.ru','ozon.com'],       searchPath:'^/search',            queryParam:'text',         searchInput:'',            icon:'ozon.ru' },
         { name:'WB',         url:'https://www.wildberries.ru/catalog/0/search.aspx?search=', hosts:['wildberries.ru'], searchPath:'search\\.aspx$',    queryParam:'search',      searchInput:'#searchInput',icon:'wildberries.ru' },
-        { name:'AliExpress', url:'https://www.aliexpress.com/wholesale?SearchText=', hosts:['aliexpress.com','aliexpress.ru'], searchPath:'/(wholesale|popular)/',queryParam:'SearchText', searchInput:'#SearchText',icon:'aliexpress.com' },
+        { name:'AliExpress', url:'https://www.aliexpress.ru/wholesale?SearchText=', hosts:['aliexpress.com','aliexpress.ru'], searchPath:'/(wholesale|popular)/',queryParam:'SearchText', searchInput:'#SearchText',icon:'aliexpress.com' },
         { name:'Кинориум',   url:'https://ru.kinorium.com/search/?q=',              hosts:['kinorium.com'],             searchPath:'^/search',            queryParam:'q',            searchInput:'',            icon:'kinorium.com' },
     ];
 
