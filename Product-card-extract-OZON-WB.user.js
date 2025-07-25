@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
-// @version      1.0.2
+// @version      1.0.3
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -155,11 +155,26 @@
             const orange = 'rgb(255, 165, 0)';
             const starsCnt = (n) => [...n.querySelectorAll('svg')].filter((s) => s.style.color === orange).length || '—';
             const getDate = (n) => {
-                const ts = n.getAttribute('publishedat');
-                if (ts && /^\d+$/.test(ts)) {
-                    return new Date(+ts * 1000).toLocaleDateString('ru-RU');
+                const attrNode =
+                    n.getAttribute('publishedat') ||
+                    n.getAttribute('publishedAt') ||
+                    n.querySelector('[publishedat]')?.getAttribute('publishedat') ||
+                    n.querySelector('[datetime]')?.getAttribute('datetime') ||
+                    n.querySelector('time')?.getAttribute('datetime');
+
+                if (attrNode) {
+                    if (/^\d{10,13}$/.test(attrNode)) {
+                        const ms = attrNode.length === 13 ? +attrNode : +attrNode * 1000;
+                        return new Date(ms).toLocaleDateString('ru-RU');
+                    }
+                    const iso = attrNode.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                    if (iso) {
+                        const [y, m, d] = iso.split('-');
+                        return `${d}.${m}.${y}`;
+                    }
                 }
-                const maybe = [...n.querySelectorAll('div')]
+
+                const maybe = [...n.querySelectorAll('div, span, time')]
                     .map((el) => el.textContent.trim())
                     .find((t) => /^\d{1,2}\s+\D+\s+\d{4}$/.test(t));
                 return maybe || '—';
