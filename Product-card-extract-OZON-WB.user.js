@@ -358,7 +358,9 @@
 
         // Mount button near the title on WB (supports new hashed classes + old one)
         const wbTitleSelector = 'h1[class^="productTitle"], h1[class*=" productTitle"], .product-page__title';
-        setInterval(() => createBtn(document.querySelector(wbTitleSelector), exportWB), 1000);
+        const mount = () => createBtn(document.querySelector(wbTitleSelector), exportWB);
+        mount();
+        new MutationObserver(mount).observe(document.body, { childList: true, subtree: true });
 
     }
 
