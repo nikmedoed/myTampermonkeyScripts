@@ -6,7 +6,7 @@
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
-// @match        https://www.wildberries.ru/*
+// @match        https://*.wildberries.ru/*
 // @grant        GM_download
 // @sandbox      DOM
 // @run-at       document-idle
