@@ -6,7 +6,7 @@
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
-// @match        https://www.wildberries.ru/*
+// @match        https://*.wildberries.ru/*
 // @grant        GM_download
 // @sandbox      DOM
 // @run-at       document-idle
@@ -256,34 +256,59 @@
 
         async function exportWB() {
             const url = location.href;
-            const header = document.querySelector('.product-page__header-wrap');
+            const header = document.querySelector('[class^="productHeaderWrap"], .product-page__header-wrap');
             if (!header) return;
 
-            const brand = header.querySelector('.product-page__header-brand')?.innerText.trim() || '—';
-            const title = header.querySelector('.product-page__title')?.innerText.trim() || '—';
-            const original = header.querySelector('.product-page__original-mark') ? 'Да' : '—';
-            const rating = header.querySelector('.product-review__rating')?.innerText.trim() || '—';
-            const reviewsTotal = header.querySelector('.product-review__count-review')?.innerText.replace(/\D+/g, '') || '0';
-            const priceEl = document.querySelector('.product-page__price-block--aside .price-block__wallet-price') || document.querySelector('.product-page__price-block--aside .price-block__price');
-            const price = priceEl?.innerText.replace(/\s+/g, ' ').trim() || '—';
+            // Brand / Title
+            const brand = (document.querySelector('[class^="productHeaderBrand"]')?.innerText || '—').trim();
+            const title = (document.querySelector('h1[class^="productTitle"], h1[class*=" productTitle"], .product-page__title')?.innerText || '—').trim();
+
+            // Original mark
+            const original = document.querySelector('[class^="productHeader"] [class*="original"]') ? 'Да' : '—';
+
+            // Rating + total reviews
+            const rating = (document.querySelector('[class^="productReviewRating"]')?.innerText || '—').trim();
+            const reviewsTotal = (document.querySelector('[class^="productReviewCount"]')?.innerText.replace(/\D+/g, '') || '0');
+
+            // Reviews entry link (new + old)
+            const reviewsLink = document.querySelector('a[class^="productReview"], a.product-review');
+
+            // Price: prefer wallet price, fallback to final price, strip spaces inside digits
+            const priceNode = document.querySelector('[class^="priceBlockWalletPrice"], [class*=" priceBlockWalletPrice"]')
+                || document.querySelector('ins[class^="priceBlockFinalPrice"], ins[class*=" priceBlockFinalPrice"]')
+                || document.querySelector('span[class^="priceBlockPrice"], span[class*=" priceBlockPrice"], [class*="priceBlock"] [class*="price"], [class*="orderBlock"] [class*="price"]');
+            let price = '—';
+            if (priceNode) {
+                const raw = priceNode.textContent.replace(/\s+/g, '');
+                price = raw.replace(/([₽€$])/, ' $1');
+            }
 
             // characteristics & description
-            const showBtn = [...document.querySelectorAll('button, a')].find((el) => /характеристик|описани/i.test(el.innerText));
+            const showBtn = [...document.querySelectorAll('button, a')]
+                .find(el => /характеристик|описани/i.test(el.innerText));
             if (showBtn) { showBtn.click(); await sleep(400); }
-            const popup = document.querySelector('.popup-product-details.shown');
+
+            // Try to locate details container (new dialog or legacy popup)
+            const popup = [...document.querySelectorAll('[role="dialog"], .popup-product-details, [class*="product-details"]')]
+                .find(n => /Характеристики|Описание/i.test(n.innerText || ''));
+
             let chars = '—', descr = '—';
             if (popup) {
-                const rows = [...popup.querySelectorAll('.product-params__row')]
-                .map((r) => {
-                    const k = r.querySelector('th')?.innerText.trim().replace(/[:\s]+$/, '');
-                    const v = r.querySelector('td')?.innerText.trim();
-                    return k && v ? `${k}: ${v}` : null;
-                })
-                .filter(Boolean);
+                // Characteristics: support both legacy table and new rows
+                const rows = [...popup.querySelectorAll('.product-params__row, tr')]
+                    .map(r => {
+                        const k = (r.querySelector('th, [class*="param"] th, [class*="cell"] .cellDecor--UCLGS, [class*="cellWrapper"]')?.innerText || '')
+                            .replace(/[:\s]+$/, '').trim();
+                        const v = (r.querySelector('td, [class*="param"] td, [class*="cellCopy"], [class*="cell"] span')?.innerText || '')
+                            .trim();
+                        return k && v ? `${k}: ${v}` : null;
+                    })
+                    .filter(Boolean);
                 if (rows.length) chars = rows.join('\n');
-                const dEl = popup.querySelector('.product-details__description .option__text');
+
+                // Description: try common containers
+                const dEl = popup.querySelector('.product-details__description .option__text, [class*="description"] .option__text, [class*="description"]');
                 if (dEl) descr = dEl.innerText.trim();
-                popup.querySelector('.popup__close')?.click();
             }
 
             const lines = [
@@ -302,12 +327,12 @@
             ];
 
             // reviews
-            const btn = header.querySelector('a.product-review');
-            if (btn) {
-                btn.click();
-                await wait('.product-feedbacks__main', 10000);
+            if (reviewsLink) {
+                reviewsLink.click();
+                await wait('.product-feedbacks__main, [class*="product-feedbacks__main"]', 10000);
                 await sleep(300);
-                const variant = [...document.querySelectorAll('.product-feedbacks__tabs .product-feedbacks__title')].find((el) => /этот вариант товара/i.test(el.innerText));
+                const variant = [...document.querySelectorAll('.product-feedbacks__tabs .product-feedbacks__title, [class*="product-feedbacks__title"]')]
+                    .find(el => /этот вариант товара/i.test(el.innerText));
                 if (variant) { variant.click(); await sleep(300); }
                 const revs = await loadWBReviews(100);
                 lines.push('', `Отзывы (выгружено ${revs.length}):`);
@@ -324,8 +349,8 @@
                         const cons = el.querySelector('.feedback__text--item-con')?.innerText.replace(/^Недостатки:/, '').trim();
                         if (cons) parts.push(`Недостатки: ${cons}`);
                         const free = [...el.querySelectorAll('.feedback__text--item')]
-                        .find((n) => !n.classList.contains('feedback__text--item-pro') && !n.classList.contains('feedback__text--item-con'))
-                        ?.innerText.replace(/^Комментарий:/, '').trim();
+                            .find(n => !n.classList.contains('feedback__text--item-pro') && !n.classList.contains('feedback__text--item-con'))
+                            ?.innerText.replace(/^Комментарий:/, '').trim();
                         if (free) parts.push(`Комментарий: ${free}`);
                         lines.push(`Отзыв ${idx + 1} (${date}): ${parts.join('; ')}`);
                     });
@@ -336,7 +361,10 @@
             const fname = slug(brand + ' ' + title) + '.txt';
             GM_download({ url: 'data:text/plain;charset=utf-8,\uFEFF' + encodeURIComponent(txt), name: fname, saveAs: false });
         }
-        setInterval(() => createBtn(document.querySelector('.product-page__title'), exportWB), 1000);
+
+        // Mount button near the title on WB (supports new hashed classes + old one)
+        const wbTitleSelector = 'h1[class^="productTitle"], h1[class*=" productTitle"], .product-page__title';
+        setInterval(() => createBtn(document.querySelector(wbTitleSelector), exportWB), 1000);
 
     }
 
@@ -344,7 +372,7 @@
         ENTRY POINT
   ========================================================= */
     const host = location.hostname;
-    if (/ozon\.(ru|com)$/.test(host)) {
+    if (host.endsWith('ozon.ru') || host.endsWith('ozon.com')) {
         initOzon();
     } else if (host.includes('wildberries')) {
         initWB();
