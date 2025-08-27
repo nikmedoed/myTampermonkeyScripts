@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
-// @version      1.0.5
+// @version      1.0.4
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
