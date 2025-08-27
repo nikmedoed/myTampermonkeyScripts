@@ -273,9 +273,9 @@
             // Reviews entry link (new + old)
             const reviewsLink = document.querySelector('a[class^="productReview"], a.product-review');
 
-            // Price
-            const priceNode = document.querySelector('[class*="orderBlock"] [class*="price"], [class*="price-block"] [class*="price"]');
-            const price = priceNode ? priceNode.innerText.replace(/\s+/g, ' ').trim() : '—';
+            // Price: support new hashed classes (priceBlock*) and legacy orderBlock
+            const priceNode = document.querySelector('ins[class^="priceBlockFinalPrice"], ins[class*=" priceBlockFinalPrice"], [class*="priceBlock"] [class*="price"], [class*="orderBlock"] [class*="price"]');
+            const price = priceNode ? priceNode.textContent.replace(/\s+/g, ' ').trim() : '—';
 
             // characteristics & description
             const showBtn = [...document.querySelectorAll('button, a')]
