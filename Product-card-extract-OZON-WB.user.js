@@ -273,9 +273,15 @@
             // Reviews entry link (new + old)
             const reviewsLink = document.querySelector('a[class^="productReview"], a.product-review');
 
-            // Price: support new hashed classes (priceBlock*) and legacy orderBlock
-            const priceNode = document.querySelector('ins[class^="priceBlockFinalPrice"], ins[class*=" priceBlockFinalPrice"], [class*="priceBlock"] [class*="price"], [class*="orderBlock"] [class*="price"]');
-            const price = priceNode ? priceNode.textContent.replace(/\s+/g, ' ').trim() : '—';
+            // Price: prefer wallet price, fallback to final price, strip spaces inside digits
+            const priceNode = document.querySelector('[class^="priceBlockWalletPrice"], [class*=" priceBlockWalletPrice"]')
+                || document.querySelector('ins[class^="priceBlockFinalPrice"], ins[class*=" priceBlockFinalPrice"]')
+                || document.querySelector('span[class^="priceBlockPrice"], span[class*=" priceBlockPrice"], [class*="priceBlock"] [class*="price"], [class*="orderBlock"] [class*="price"]');
+            let price = '—';
+            if (priceNode) {
+                const raw = priceNode.textContent.replace(/\s+/g, '');
+                price = raw.replace(/([₽€$])/, ' $1');
+            }
 
             // characteristics & description
             const showBtn = [...document.querySelectorAll('button, a')]
