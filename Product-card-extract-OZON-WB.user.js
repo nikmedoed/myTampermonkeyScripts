@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.github.io
 // @author       http://t.me/nikmedoed
-// @version      1.0.3
+// @version      1.0.4
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -173,10 +173,9 @@
                         return `${d}.${m}.${y}`;
                     }
                 }
-
                 const maybe = [...n.querySelectorAll('div, span, time')]
-                    .map((el) => el.textContent.trim())
-                    .find((t) => /^\d{1,2}\s+\D+\s+\d{4}$/.test(t));
+                    .map((el) => el.textContent.trim().match(/\d{1,2}\s+\D+\s+\d{4}|\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}/)?.[0])
+                    .find(Boolean);
                 return maybe || '—';
             };
             const getText = (n) => {
@@ -194,11 +193,17 @@
                 if (comment) parts.push(`Комментарий: ${comment}`);
                 if (parts.length) return parts.join('; ');
 
+                const looksLikeDate = (t) => /^(\d{1,2}[.\/\-]\d{1,2}([.\/\-]\d{2,4})?|\d{1,2}\s+[а-яё]+\s+\d{4})$/i.test(t);
                 const span = n.querySelector('span.ro5_30, span[class*="ro5_"]');
-                if (span) return span.innerText.trim();
+                if (span) {
+                    const t = span.innerText.trim();
+                    if (t && !looksLikeDate(t)) return t;
+                }
                 const BAD = /Вам помог|Размер|Цвет|коммент|вопрос|ответ/i;
                 const leaves = [...n.querySelectorAll('span, div, p')].filter((el) => !el.children.length && !BAD.test(el.innerText));
-                const texts = leaves.map((el) => el.innerText.trim()).filter((t) => t.length >= 10);
+                const texts = leaves
+                    .map((el) => el.innerText.trim())
+                    .filter((t) => t.length >= 10 && !looksLikeDate(t));
                 texts.sort((a, b) => b.length - a.length);
                 return texts[0] || '—';
             };
