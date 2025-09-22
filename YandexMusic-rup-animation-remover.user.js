@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Yandex music rup animation remover
-// @namespace    https://nikmedoed.github.io
-// @author       http://t.me/nikmedoed
+// @namespace    https://nikmedoed.com
+// @author       https://nikmedoed.com
 // @version      0.3
 // @description  Removes useless spinning animation
 // @author       nikmedoed

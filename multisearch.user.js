@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Мультипоиск
-// @namespace    https://nikmedoed.github.io
-// @author       http://t.me/nikmedoed
+// @namespace    https://nikmedoed.com
+// @author       https://nikmedoed.com
 // @description  Гибкая панель для повторного поиска на других сайтах.
 // @version      0.6.2
 // @match        *://*/*

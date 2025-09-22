@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name         Закладки Яндекс.Карт в KML
-// @namespace    https://nikmedoed.github.io
-// @author       http://t.me/nikmedoed
+// @namespace    https://nikmedoed.com
+// @author       https://nikmedoed.com
 // @version      0.1
 // @description  Скачать закладки из списка для использования в картографических приложениях
-// @author       http://t.me/nikmedoed
 // @match        http*://yandex.ru/maps/*
 // @grant        GM_registerMenuCommand
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/bookmarks-KML.png
