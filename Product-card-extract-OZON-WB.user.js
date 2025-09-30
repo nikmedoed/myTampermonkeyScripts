@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.0.4
+// @version      1.0.5
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -43,6 +43,47 @@
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         await sleep(400);
     };
+    const ensureScrollTopButton = (() => {
+        let btn = null;
+        let scrollAttached = false;
+        const position = { bottom: '24px', right: '24px' };
+        const toCssUnit = (value) => typeof value === 'number' ? `${value}px` : value;
+        const applyPosition = () => {
+            if (!btn) return;
+            btn.style.bottom = toCssUnit(position.bottom);
+            btn.style.right = toCssUnit(position.right);
+        };
+        const toggle = () => {
+            if (!btn) return;
+            const shouldShow = window.scrollY > window.innerHeight * 0.5;
+            btn.style.opacity = shouldShow ? '1' : '0';
+            btn.style.pointerEvents = shouldShow ? 'auto' : 'none';
+        };
+        return (opts = {}) => {
+            if (opts.bottom !== undefined) position.bottom = opts.bottom;
+            if (opts.right !== undefined) position.right = opts.right;
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mp-scroll-top-btn';
+                btn.innerHTML = '&#8593;';
+                btn.style.cssText = 'position:fixed;width:46px;height:46px;border-radius:50%;border:none;background:#1a73e8;color:#fff;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,0.2);cursor:pointer;opacity:0;pointer-events:none;transition:opacity 0.2s ease;z-index:2147483647;';
+                btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+                document.body.appendChild(btn);
+                applyPosition();
+                requestAnimationFrame(toggle);
+            } else {
+                applyPosition();
+            }
+            if (!scrollAttached) {
+                scrollAttached = true;
+                window.addEventListener('scroll', toggle, { passive: true });
+                window.addEventListener('resize', toggle);
+            }
+            toggle();
+            return btn;
+        };
+    })();
     const createBtn = (node, fn) => {
         if (!node || node.parentElement.querySelector('.mp-export-btn')) return;
         const b = document.createElement('button');
@@ -57,6 +98,7 @@
         OZON SECTION
   ========================================================= */
     function initOzon() {
+        ensureScrollTopButton();
 
         const clickVariantWhenReady = (timeout = 400) => {
             const find = () => [...document.querySelectorAll('button,[role="button"]')]
@@ -244,6 +286,7 @@
         WILDBERRIES SECTION
   ========================================================= */
     function initWB() {
+        ensureScrollTopButton({ bottom: 120 });
         async function loadWBReviews(max = 100) {
             const DELAY = 600, MAX_IDLE = 6;
             let idle = 0, prev = 0;
