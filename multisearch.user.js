@@ -3,7 +3,7 @@
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
 // @description  Гибкая панель для повторного поиска на других сайтах.
-// @version      0.6.2
+// @version      0.6.3
 // @match        *://*/*
 // @sandbox      DOM
 // @run-at       document-idle
@@ -117,6 +117,27 @@
         el.addEventListener('change', handler, { passive: true });
         observedInputs.add(el);
         setTimeout(handler, 0);
+    }
+
+    function findSearchInput(site) {
+        const selectors = new Set(site.searchInput ? [site.searchInput] : []);
+        const host = location.hostname;
+        const isGoogle = site.hosts.some((h) => h.includes('google')) || host.includes('google');
+        const isYandex = site.hosts.some((h) => h.includes('yandex')) || host.includes('yandex') || /^([^.]+\.)*ya\.ru$/i.test(host);
+        if (isGoogle) {
+            ['input[name="q"]', 'textarea[name="q"]', 'input[aria-label="Search"]', 'textarea[aria-label="Search"]', 'input[aria-label="Поиск"]', 'textarea[aria-label="Поиск"]'].forEach((sel) => selectors.add(sel));
+        }
+        if (isYandex) {
+            ['input[name="text"]', 'textarea[name="text"]', '#text', 'input#header-search', 'textarea#header-search'].forEach((sel) => selectors.add(sel));
+        }
+        for (const sel of selectors) {
+            try {
+                const el = document.querySelector(sel);
+                if (el) return el;
+            } catch (err) {
+            }
+        }
+        return null;
     }
 
     let hrefPollTimer = null;
@@ -477,15 +498,13 @@
     }
 
     function extractQuery(site) {
-        if (site.searchInput) {
-            const el = document.querySelector(site.searchInput);
-            bindInputWatcher(site, el);
-            if (el && typeof el.value === 'string') {
-                const value = el.value.trim();
-                if (value) {
-                    rememberQuery(site, value);
-                    return value;
-                }
+        const el = findSearchInput(site);
+        bindInputWatcher(site, el);
+        if (el && typeof el.value === 'string') {
+            const value = el.value.trim();
+            if (value) {
+                rememberQuery(site, value);
+                return value;
             }
         }
         const fromLocation = getQueryFromLocation(site);
@@ -497,15 +516,13 @@
     }
 
     function isSearchContext(site) {
-        if (site.searchInput) {
-            const el = document.querySelector(site.searchInput);
-            bindInputWatcher(site, el);
-            if (el && typeof el.value === 'string') {
-                const value = el.value.trim();
-                if (value) {
-                    rememberQuery(site, value);
-                    return true;
-                }
+        const el = findSearchInput(site);
+        bindInputWatcher(site, el);
+        if (el && typeof el.value === 'string') {
+            const value = el.value.trim();
+            if (value) {
+                rememberQuery(site, value);
+                return true;
             }
         }
         const fromLocation = getQueryFromLocation(site);
