@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.0.5
+// @version      1.0.6
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -309,7 +309,8 @@
 
             // Brand / Title
             const brand = (document.querySelector('[class^="productHeaderBrand"]')?.innerText || '—').trim();
-            const title = (document.querySelector('h1[class^="productTitle"], h1[class*=" productTitle"], .product-page__title')?.innerText || '—').trim();
+            const titleNode = document.querySelector('[class^="productTitle"], [class*=" productTitle"], .product-page__title');
+            const title = (titleNode?.innerText || titleNode?.textContent || '—').trim();
 
             // Original mark
             const original = document.querySelector('[class^="productHeader"] [class*="original"]') ? 'Да' : '—';
@@ -411,7 +412,7 @@
         }
 
         // Mount button near the title on WB (supports new hashed classes + old one)
-        const wbTitleSelector = 'h1[class^="productTitle"], h1[class*=" productTitle"], .product-page__title';
+        const wbTitleSelector = '[class^="productTitle"], [class*=" productTitle"], .product-page__title';
         setInterval(() => createBtn(document.querySelector(wbTitleSelector), exportWB), 1000);
 
     }
