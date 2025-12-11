@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.0.6
+// @version      1.0.7
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -170,7 +170,7 @@
 
         /* --------- reviews ---------- */
         async function loadReviews(max = 100) {
-            const hSpan = [...document.querySelectorAll('span')].find((s) => /Отзывы о товаре/i.test(s.textContent));
+            const hSpan = [...document.querySelectorAll('span, h2, h3')].find((s) => /Отзывы о товаре|Отзывы/i.test(s.textContent));
             if (!hSpan) return { header: 'Отзывы: нет отзывов.', items: [] };
 
             await smooth(hSpan);
@@ -179,7 +179,7 @@
             await sleep(600);
 
             const declared = parseInt(hSpan.parentElement.querySelector('span:not(:first-child)')?.innerText.replace(/\s+/g, '') || '0', 10) || 0;
-            const avg = [...document.querySelectorAll('span')].find((s) => /\d+[.,]\d+\s*\/\s*5/.test(s.textContent.trim()))?.innerText.trim() || '—';
+            const avg = [...document.querySelectorAll('span, div')].find((s) => /\d+[.,]\d+\s*\/\s*5/.test(s.textContent.trim()))?.innerText.trim() || '—';
 
             /* dynamic load */
             const moreBtn = () => [...document.querySelectorAll('button')].find((b) => /ещё/i.test(b.innerText));
@@ -194,8 +194,19 @@
             }
 
             const nodes = [...document.querySelectorAll('[data-review-uuid]')].slice(0, max);
-            const orange = 'rgb(255, 165, 0)';
-            const starsCnt = (n) => [...n.querySelectorAll('svg')].filter((s) => s.style.color === orange).length || '—';
+            const starsCnt = (n) => {
+                const aria = n.querySelector('[aria-label*="из 5" i]')?.getAttribute('aria-label');
+                if (aria) {
+                    const m = aria.match(/([0-5](?:[.,]\d)?)/);
+                    if (m) return m[1].replace(',', '.');
+                }
+                const data = n.getAttribute('data-rate') || n.getAttribute('data-rating');
+                if (data) return data;
+                const colored = [...n.querySelectorAll('svg [fill], svg [color], svg')]
+                    .map((el) => el.getAttribute('fill') || el.getAttribute('color') || '')
+                    .filter((c) => /#|rgb/.test(c)).length;
+                return colored || '—';
+            };
             const getDate = (n) => {
                 const attrNode =
                     n.getAttribute('publishedat') ||
@@ -315,12 +326,15 @@
             // Original mark
             const original = document.querySelector('[class^="productHeader"] [class*="original"]') ? 'Да' : '—';
 
-            // Rating + total reviews
-            const rating = (document.querySelector('[class^="productReviewRating"]')?.innerText || '—').trim();
-            const reviewsTotal = (document.querySelector('[class^="productReviewCount"]')?.innerText.replace(/\D+/g, '') || '0');
+            // Rating + total reviews (robust to hashed classes)
+            const rating = (document.querySelector('[class*="ReviewRating"], [data-qaid="product-review-rating"], [itemprop="ratingValue"]')?.textContent || '—').trim();
+            const reviewsTotal = (document.querySelector('[class*="ReviewCount"], [data-qaid="product-review-count"], [itemprop="reviewCount"]')?.textContent || '')
+                .replace(/\D+/g, '') || '0';
 
-            // Reviews entry link (new + old)
-            const reviewsLink = document.querySelector('a[class^="productReview"], a.product-review');
+            // Reviews entry link (new + old + updated layout)
+            const reviewsLink = document.querySelector(
+                'a[class^="productReview"], a.product-review, #product-feedbacks a.comments__btn-all, #product-feedbacks a.user-opinion__text, a[href*="/feedbacks"]'
+            );
 
             // Price: prefer wallet price, fallback to final price, strip spaces inside digits
             const priceNode = document.querySelector('[class^="priceBlockWalletPrice"], [class*=" priceBlockWalletPrice"]')
@@ -337,27 +351,34 @@
                 .find(el => /характеристик|описани/i.test(el.innerText));
             if (showBtn) { showBtn.click(); await sleep(400); }
 
-            // Try to locate details container (new dialog or legacy popup)
-            const popup = [...document.querySelectorAll('[role="dialog"], .popup-product-details, [class*="product-details"]')]
-                .find(n => /Характеристики|Описание/i.test(n.innerText || ''));
+            // Try to locate details container (dialog or legacy popup) without tying to hash classes
+            const popup = [...document.querySelectorAll('[role="dialog"], .popup-product-details, [data-testid="product_additional_information"], section')]
+                .find(n => /Характеристики|описание/i.test(n.innerText || ''));
 
             let chars = '—', descr = '—';
             if (popup) {
-                // Characteristics: support both legacy table and new rows
-                const rows = [...popup.querySelectorAll('.product-params__row, tr')]
-                    .map(r => {
-                        const k = (r.querySelector('th, [class*="param"] th, [class*="cell"] .cellDecor--UCLGS, [class*="cellWrapper"]')?.innerText || '')
-                            .replace(/[:\s]+$/, '').trim();
-                        const v = (r.querySelector('td, [class*="param"] td, [class*="cellCopy"], [class*="cell"] span')?.innerText || '')
-                            .trim();
-                        return k && v ? `${k}: ${v}` : null;
-                    })
-                    .filter(Boolean);
-                if (rows.length) chars = rows.join('\n');
+                // Characteristics: iterate tables with header+body pairs to avoid hash classes
+                const rowTexts = [];
+                popup.querySelectorAll('table').forEach((tbl) => {
+                    tbl.querySelectorAll('tr').forEach((tr) => {
+                        const k = (tr.querySelector('th, [class*="cellDecor"], [class*="cellWrapper"]')?.innerText || '').replace(/[:\s]+$/, '').trim();
+                        const v = (tr.querySelector('td, [class*="cellValue"], [data-value]')?.innerText || '').trim();
+                        if (k && v && k.toLowerCase() !== v.toLowerCase()) rowTexts.push(`${k}: ${v}`);
+                    });
+                });
+                // fallback for definition-list rows
+                popup.querySelectorAll('.product-params__row').forEach((r) => {
+                    const k = (r.querySelector('th')?.innerText || '').replace(/[:\s]+$/, '').trim();
+                    const v = (r.querySelector('td')?.innerText || '').trim();
+                    if (k && v && k.toLowerCase() !== v.toLowerCase()) rowTexts.push(`${k}: ${v}`);
+                });
+                if (rowTexts.length) chars = rowTexts.join('\n');
 
-                // Description: try common containers
-                const dEl = popup.querySelector('.product-details__description .option__text, [class*="description"] .option__text, [class*="description"]');
-                if (dEl) descr = dEl.innerText.trim();
+                // Description: prefer explicit section-description, else heading "Описание"
+                const descSection = popup.querySelector('#section-description, [id*="section-description"]');
+                const descNode = descSection?.querySelector('p, div') || [...popup.querySelectorAll('h3, h2, h4')]
+                    .find(h => /описани/i.test(h.textContent || ''))?.nextElementSibling;
+                if (descNode) descr = descNode.innerText.trim();
             }
 
             const lines = [
@@ -384,6 +405,18 @@
                     .find(el => /этот вариант товара/i.test(el.innerText));
                 if (variant) { variant.click(); await sleep(300); }
                 const revs = await loadWBReviews(100);
+                const pickBables = (node) => {
+                    const res = [];
+                    node.querySelectorAll('.feedbacks-bables').forEach((b) => {
+                        const title = b.querySelector('.feedbacks-bables__title')?.innerText.trim();
+                        const vals = [...b.querySelectorAll('.feedbacks-bables__item')]
+                            .map((li) => li.innerText.trim())
+                            .filter(Boolean);
+                        if (title && vals.length) res.push(`${title}: ${vals.join(', ')}`);
+                    });
+                    return res;
+                };
+
                 lines.push('', `Отзывы (выгружено ${revs.length}):`);
                 if (revs.length) {
                     revs.forEach((el, idx) => {
@@ -393,6 +426,7 @@
                         const rate = cls ? cls.replace('star', '') + '★' : '—';
                         const purchased = el.querySelector('.feedback__state--text')?.innerText.trim() || '—';
                         const parts = [`${rate}, ${purchased}`];
+
                         const pros = el.querySelector('.feedback__text--item-pro')?.innerText.replace(/^Достоинства:/, '').trim();
                         if (pros) parts.push(`Достоинства: ${pros}`);
                         const cons = el.querySelector('.feedback__text--item-con')?.innerText.replace(/^Недостатки:/, '').trim();
@@ -401,6 +435,9 @@
                             .find(n => !n.classList.contains('feedback__text--item-pro') && !n.classList.contains('feedback__text--item-con'))
                             ?.innerText.replace(/^Комментарий:/, '').trim();
                         if (free) parts.push(`Комментарий: ${free}`);
+
+                        // new WB layout: bable badges for pros/cons
+                        pickBables(el).forEach((t) => parts.push(t));
                         lines.push(`Отзыв ${idx + 1} (${date}): ${parts.join('; ')}`);
                     });
                 } else lines.push('Нет отзывов');
