@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.0.7
+// @version      1.0.8
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -179,7 +179,19 @@
             await sleep(600);
 
             const declared = parseInt(hSpan.parentElement.querySelector('span:not(:first-child)')?.innerText.replace(/\s+/g, '') || '0', 10) || 0;
-            const avg = [...document.querySelectorAll('span, div')].find((s) => /\d+[.,]\d+\s*\/\s*5/.test(s.textContent.trim()))?.innerText.trim() || '—';
+            const avg = (() => {
+                const scoreWrap = document.querySelector('[data-widget="webSingleProductScore"]');
+                if (scoreWrap) {
+                    const t = scoreWrap.textContent.trim();
+                    const m = t.match(/([0-5](?:[.,]\d)?)/);
+                    if (m) return m[1].replace(',', '.');
+                }
+                const short = [...document.querySelectorAll('span, div')].find((s) => {
+                    const t = s.textContent.trim();
+                    return t.length <= 30 && /\d+[.,]\d+\s*\/\s*5/.test(t);
+                });
+                return short?.textContent.trim() || '—';
+            })();
 
             /* dynamic load */
             const moreBtn = () => [...document.querySelectorAll('button')].find((b) => /ещё/i.test(b.innerText));
