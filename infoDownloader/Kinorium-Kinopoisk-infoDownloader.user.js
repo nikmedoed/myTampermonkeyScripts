@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kinopoisk Info Downloader
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Download movie or series info
 // @author       nikmedoed
 // @match        https://www.kinopoisk.ru/film/*
@@ -22,6 +22,17 @@
         document.body.appendChild(element);
         element.click();
         document.body.removeChild(element);
+    }
+
+    function openRutracker(title, year) {
+        const yearSuffix = year ? ` ${year}` : '';
+        const normalizedTitle = `${title}${yearSuffix}`.replace(/\s+/g, ' ').trim();
+        if (!normalizedTitle) {
+            return;
+        }
+
+        const link = `https://rutracker.org/forum/tracker.php?nm=${encodeURIComponent(normalizedTitle)}`;
+        window.open(link, '_blank');
     }
 
     function getInfo() {
@@ -88,23 +99,34 @@
         download(filename, `${info.title}\n${info.year}\n${info.url}\n${type}`);
     }
 
-    function addButton(selector) {
-        var button = document.createElement('button');
-        button.innerText = 'Скачать';
-        button.style.marginLeft = '10px';
-        button.onclick = action;
-
+    function addButtons(selector) {
+        var info = getInfo();
         var parentElement = document.querySelector(selector);
-        if (parentElement) {
-            parentElement.appendChild(button);
+        if (!parentElement) {
+            return;
         }
+
+        var downloadButton = document.createElement('button');
+        downloadButton.innerText = 'Скачать';
+        downloadButton.style.marginLeft = '10px';
+        downloadButton.onclick = action;
+
+        var rutrackerButton = document.createElement('button');
+        rutrackerButton.innerText = 'Rtrkr';
+        rutrackerButton.style.marginLeft = '10px';
+        rutrackerButton.onclick = function() {
+            openRutracker(info.title, info.year);
+        };
+
+        parentElement.appendChild(downloadButton);
+        parentElement.appendChild(rutrackerButton);
     }
 
     window.addEventListener('load', function() {
         if (window.location.href.includes('kinopoisk.ru')) {
-            addButton('div > h1[itemprop="name"]');
+            addButtons('div > h1[itemprop="name"]');
         } else if (window.location.href.includes('ru.kinorium.com')) {
-            addButton('.film-page__title-elements-wrap');
+            addButtons('.film-page__title-elements-wrap');
         }
     });
 
