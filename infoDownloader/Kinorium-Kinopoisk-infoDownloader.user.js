@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kinopoisk Info Downloader
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Download movie or series info
 // @author       nikmedoed
 // @match        https://www.kinopoisk.ru/film/*
@@ -35,7 +35,9 @@
         window.open(link, '_blank');
     }
 
-    function getInfo() {
+    function getInfo(options) {
+        const settings = options || {};
+        const touchStatus = Boolean(settings.touchStatus);
         var title = '', year = '', url = window.location.href, isSeries = false;
 
         if (url.includes('kinopoisk.ru')) {
@@ -80,11 +82,13 @@
             if (document.querySelector("div > span > span > span.film-page__serial-label")) {
                 isSeries = true;
             }
-            let watchButton = document.querySelector("button.setStatus.future.statusWidget");
-            if (watchButton) {
-                let isActive = watchButton.querySelector("div.active") !== null;
-                if (!isActive) {
-                    watchButton.click();
+            if (touchStatus) {
+                let watchButton = document.querySelector("button.setStatus.future.statusWidget");
+                if (watchButton) {
+                    let isActive = watchButton.querySelector("div.active") !== null;
+                    if (!isActive) {
+                        watchButton.click();
+                    }
                 }
             }
         }
@@ -93,7 +97,7 @@
     }
 
     function action() {
-        var info = getInfo();
+        var info = getInfo({ touchStatus: true });
         var type = info.isSeries ? 'Сериал' : 'Фильм';
         var filename = `${type}_${info.title}`;
         download(filename, `${info.title}\n${info.year}\n${info.url}\n${type}`);
