@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Kinopoisk Info Downloader
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Download movie or series info
 // @author       nikmedoed
 // @match        https://www.kinopoisk.ru/film/*
@@ -73,13 +73,19 @@
             }
         }
         else if (url.includes('ru.kinorium.com')) {
-            title = document.querySelector('.film-page__title-text').innerText;
-            let yearMatch = document.querySelector('.film-page__date a').innerText.match(/\d{4}/);
+            const titleNode = document.querySelector('.film-page__title-text');
+            title = titleNode ? titleNode.innerText.trim() : '';
+            const yearNode = document.querySelector('.film-page__date a');
+            const yearMatch = (yearNode?.innerText || '').match(/\d{4}/);
             if (yearMatch) {
                 year = yearMatch[0];
             }
 
-            if (document.querySelector("div > span > span > span.film-page__serial-label")) {
+            const titleBlock = document.querySelector('.film-page__title-elements, .film-page__title');
+            const serialLabel = titleBlock?.querySelector('.film-page__serial-label');
+            const episodesLink = titleBlock?.querySelector('a[href*="/episodes/"]');
+            const labelText = titleBlock?.querySelector('.film-page__title-label')?.textContent || '';
+            if (serialLabel || episodesLink || /сериал/i.test(labelText)) {
                 isSeries = true;
             }
             if (touchStatus) {
