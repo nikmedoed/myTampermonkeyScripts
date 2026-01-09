@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.1.0
+// @version      1.2.0
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -162,6 +162,25 @@
         }
         return node?.parentElement || node;
     };
+    const findPriceInCard = (card, opts = {}) => {
+        if (!card) return null;
+        const nodes = [...card.querySelectorAll('ins, span, div, p, strong, b, del')];
+        let best = null;
+        for (const n of nodes) {
+            if (n.closest('.mp-min-price-badge')) continue;
+            const text = (n.textContent || '').trim();
+            if (!text || !/[₽€$]/.test(text) || !/\d/.test(text)) continue;
+            const price = parsePriceValue(text);
+            if (!Number.isFinite(price)) continue;
+            const isOld = n.tagName === 'DEL' || n.closest('del') || /line-through/i.test(n.style.textDecoration || '');
+            const currency = detectCurrency(text) || opts.defaultCurrency || '₽';
+            const cand = { price, currency, old: !!isOld };
+            if (!best || (best.old && !cand.old) || (cand.old === best.old && cand.price < best.price)) {
+                best = cand;
+            }
+        }
+        return best;
+    };
 
     const PRICE_DB = { name: 'mp-price-history', store: 'prices', version: 1 };
     let priceDbPromise = null;
@@ -316,6 +335,8 @@
     };
     const startPreviewMinPriceBadges = (opts) => {
         const state = { running: false };
+        const cardTtl = opts.cardTtl || 30000;
+        const priceTtl = opts.priceTtl || 15000;
         const tick = async () => {
             if (state.running) return;
             state.running = true;
@@ -325,11 +346,32 @@
                     const pid = opts.getPid(card);
                     if (!pid) continue;
                     const pidKey = `${opts.market}:${pid}`;
+                    const now = Date.now();
+                    let priceUpdated = false;
+                    if (opts.getPrice) {
+                        let priceInfo = opts.getPrice(card);
+                        if (priceInfo instanceof Promise) priceInfo = await priceInfo;
+                        if (priceInfo && Number.isFinite(priceInfo.price)) {
+                            const lastPriceKey = card.__mpPricePidKey;
+                            const lastPriceTs = card.__mpPriceTs || 0;
+                            if (lastPriceKey !== pidKey || (now - lastPriceTs) > priceTtl) {
+                                card.__mpPricePidKey = pidKey;
+                                card.__mpPriceTs = now;
+                                try {
+                                    await recordPriceSnapshot(pidKey, pid, priceInfo.price, priceInfo.currency);
+                                    minPriceCache.delete(pidKey);
+                                    priceUpdated = true;
+                                } catch (e) {
+                                    console.warn('Card price record failed:', e);
+                                }
+                            }
+                        }
+                    }
                     const lastKey = card.__mpMinPricePidKey;
                     const lastTs = card.__mpMinPriceTs || 0;
-                    if (lastKey === pidKey && (Date.now() - lastTs) < (opts.cardTtl || 30000)) continue;
+                    if (!priceUpdated && lastKey === pidKey && (now - lastTs) < cardTtl) continue;
                     card.__mpMinPricePidKey = pidKey;
-                    card.__mpMinPriceTs = Date.now();
+                    card.__mpMinPriceTs = now;
                     const record = await getMinPriceRecordCached(pidKey);
                     renderMinPriceBadge(card, record);
                 }
@@ -612,6 +654,7 @@
             market: 'ozon',
             cardSelector: 'div[class*="tile-root"]',
             getPid: getOzonCardPid,
+            getPrice: (card) => findPriceInCard(card, { defaultCurrency: '₽' }),
             interval: 4000,
         });
 
@@ -873,6 +916,7 @@
             market: 'wb',
             cardSelector: 'article.product-card, article[data-nm-id], article[data-popup-nm-id], div.product-card[data-nm-id], div.product-card[data-popup-nm-id]',
             getPid: getWBCardPid,
+            getPrice: (card) => findPriceInCard(card, { defaultCurrency: '₽' }),
             interval: 4000,
         });
         async function loadWBReviews(max = 100) {
