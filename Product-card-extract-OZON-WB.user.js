@@ -2,7 +2,7 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.2.0
+// @version      1.2.1
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
@@ -334,55 +334,40 @@
         badge.classList.remove('mp-min-price-badge--empty');
     };
     const startPreviewMinPriceBadges = (opts) => {
-        const state = { running: false };
-        const cardTtl = opts.cardTtl || 30000;
-        const priceTtl = opts.priceTtl || 15000;
-        const tick = async () => {
-            if (state.running) return;
-            state.running = true;
+        let attempts = 0;
+        const maxAttempts = 8;
+        const poll = async () => {
+            attempts += 1;
             try {
                 const cards = [...document.querySelectorAll(opts.cardSelector)];
                 for (const card of cards) {
                     const pid = opts.getPid(card);
                     if (!pid) continue;
                     const pidKey = `${opts.market}:${pid}`;
-                    const now = Date.now();
-                    let priceUpdated = false;
                     if (opts.getPrice) {
                         let priceInfo = opts.getPrice(card);
                         if (priceInfo instanceof Promise) priceInfo = await priceInfo;
                         if (priceInfo && Number.isFinite(priceInfo.price)) {
-                            const lastPriceKey = card.__mpPricePidKey;
-                            const lastPriceTs = card.__mpPriceTs || 0;
-                            if (lastPriceKey !== pidKey || (now - lastPriceTs) > priceTtl) {
-                                card.__mpPricePidKey = pidKey;
-                                card.__mpPriceTs = now;
-                                try {
-                                    await recordPriceSnapshot(pidKey, pid, priceInfo.price, priceInfo.currency);
-                                    minPriceCache.delete(pidKey);
-                                    priceUpdated = true;
-                                } catch (e) {
-                                    console.warn('Card price record failed:', e);
-                                }
+                            try {
+                                await recordPriceSnapshot(pidKey, pid, priceInfo.price, priceInfo.currency);
+                                minPriceCache.delete(pidKey);
+                            } catch (e) {
+                                console.warn('Card price record failed:', e);
                             }
                         }
                     }
-                    const lastKey = card.__mpMinPricePidKey;
-                    const lastTs = card.__mpMinPriceTs || 0;
-                    if (!priceUpdated && lastKey === pidKey && (now - lastTs) < cardTtl) continue;
-                    card.__mpMinPricePidKey = pidKey;
-                    card.__mpMinPriceTs = now;
                     const record = await getMinPriceRecordCached(pidKey);
                     renderMinPriceBadge(card, record);
                 }
             } catch (err) {
                 console.warn('Preview min price:', err);
             } finally {
-                state.running = false;
+                if (attempts < maxAttempts && document.querySelectorAll(opts.cardSelector).length === 0) {
+                    setTimeout(poll, opts.pollInterval || 1200);
+                }
             }
         };
-        tick();
-        return setInterval(tick, opts.interval || 4000);
+        poll();
     };
     const ensurePriceChartStyles = () => {
         addStyleOnce(`
@@ -558,26 +543,35 @@
         return container;
     };
     const startPriceHistory = (opts) => {
-        const state = { running: false, pidKey: '', loaded: false, container: null };
+        const state = { running: false, snapshot: false, pidKey: '', container: null, graceTicks: 0 };
+        const interval = opts.pollInterval || opts.interval || 1200;
+        const timeoutMs = opts.timeout || 15000;
+        const stopAt = Date.now() + timeoutMs;
         const tick = async () => {
             if (state.running) return;
             state.running = true;
             try {
                 const pid = await opts.getPid();
                 const priceInfo = opts.getPrice();
-                if (!pid || !priceInfo || !Number.isFinite(priceInfo.price)) return;
-                const pidKey = `${opts.market}:${pid}`;
-                if (pidKey !== state.pidKey) {
-                    state.pidKey = pidKey;
-                    state.loaded = false;
-                }
                 const anchor = opts.getAnchor ? opts.getAnchor() : null;
                 state.container = ensurePriceChartContainer(state.container, anchor, !anchor);
-                const updated = await recordPriceSnapshot(pidKey, pid, priceInfo.price, priceInfo.currency);
-                if (updated || !state.loaded) {
-                    const history = await getPriceHistory(pidKey);
-                    renderPriceChart(state.container, history, { currency: priceInfo.currency || '₽' });
-                    state.loaded = true;
+                if (pid) state.pidKey = `${opts.market}:${pid}`;
+                if (!state.snapshot && pid && priceInfo && Number.isFinite(priceInfo.price)) {
+                    await recordPriceSnapshot(state.pidKey, pid, priceInfo.price, priceInfo.currency);
+                    minPriceCache.delete(state.pidKey);
+                    state.snapshot = true;
+                    state.graceTicks = 3; // keep a few ticks to reattach near anchor if it appears
+                }
+                if (state.snapshot && state.pidKey) {
+                    const history = await getPriceHistory(state.pidKey);
+                    renderPriceChart(state.container, history, { currency: priceInfo?.currency || '₽' });
+                    if (state.graceTicks > 0) state.graceTicks -= 1;
+                }
+                if (state.snapshot && state.graceTicks === 0) {
+                    clearInterval(timer);
+                }
+                if (Date.now() > stopAt) {
+                    clearInterval(timer);
                 }
             } catch (err) {
                 console.warn('Price history:', err);
@@ -585,8 +579,8 @@
                 state.running = false;
             }
         };
+        const timer = setInterval(tick, interval);
         tick();
-        return setInterval(tick, opts.interval || 3000);
     };
 
     /* =========================================================
