@@ -2,12 +2,17 @@
 // @name         Marketplace Instant Exporter with Reviews
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.2.1
+// @version      1.3.0
 // @description  Export product data + up to 100 reviews as TXT from **Ozon** & **Wildberries** (единый WB‑style формат)
 // @match        https://*.ozon.ru/*
 // @match        https://*.ozon.com/*
 // @match        https://*.wildberries.ru/*
 // @grant        GM_download
+// @grant        GM_xmlhttpRequest
+// @grant        GM_registerMenuCommand
+// @connect      localhost
+// @connect      127.0.0.1
+// @connect      *
 // @sandbox      DOM
 // @run-at       document-idle
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/ozon-wb-download.png
@@ -15,10 +20,6 @@
 // @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/OZON-WB-tools/Product-card-extract-OZON-WB.user.js
 // @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/OZON-WB-tools/Product-card-extract-OZON-WB.user.js
 // ==/UserScript==
-
-// LEGACY
-// DO NOT EDIT
-// USE NEW VERSION OZON-WB-tools\Product-card-extract-OZON-WB.user.js
 
 (function () {
     'use strict';
@@ -97,6 +98,24 @@
         b.addEventListener('click', fn);
         node.insertAdjacentElement('afterend', b);
     };
+    const downloadTextFile = (name, text) => {
+        const bom = '\uFEFF';
+        try {
+            if (typeof Blob === 'function' && typeof URL !== 'undefined') {
+                const blob = new Blob([bom, text], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                GM_download({
+                    url,
+                    name,
+                    saveAs: false,
+                    onload: () => URL.revokeObjectURL(url),
+                    onerror: () => URL.revokeObjectURL(url),
+                });
+                return;
+            }
+        } catch (_) {}
+        GM_download({ url: 'data:text/plain;charset=utf-8,' + bom + encodeURIComponent(text), name, saveAs: false });
+    };
     const addStyleOnce = (() => {
         const injected = new Set();
         return (css, key = css) => {
@@ -107,6 +126,14 @@
             document.head.appendChild(s);
         };
     })();
+    const toBullets = (text) => {
+        if (!text || text === '—') return ['—'];
+        return text
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .map((l) => `- ${l}`);
+    };
     const parsePriceValue = (text) => {
         if (!text) return null;
         const cleaned = text.replace(/\s+/g, '').replace(/[^\d.,]/g, '');
@@ -214,6 +241,18 @@
             tx.onabort = () => reject(tx.error);
         });
     };
+    const addPriceRecordsBulk = async (records = []) => {
+        if (!records.length) return false;
+        const db = await openPriceDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(PRICE_DB.store, 'readwrite');
+            const store = tx.objectStore(PRICE_DB.store);
+            records.forEach((r) => store.put(r));
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+        });
+    };
     const getLastPriceRecords = async (pidKey, limit = 2) => {
         const db = await openPriceDb();
         return new Promise((resolve, reject) => {
@@ -260,7 +299,7 @@
             req.onerror = () => reject(req.error);
         });
     };
-    const getPriceHistory = async (pidKey) => {
+    const getLocalPriceHistory = async (pidKey) => {
         const db = await openPriceDb();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(PRICE_DB.store, 'readonly');
@@ -271,20 +310,216 @@
             req.onerror = () => reject(req.error);
         });
     };
+    const mergePriceHistories = (a = [], b = []) => {
+        const map = new Map();
+        const add = (rec) => {
+            if (!rec || !rec.pidKey) return;
+            const ts = Number(rec.ts);
+            if (!Number.isFinite(ts)) return;
+            const price = Number(rec.price);
+            const key = rec.key || `${rec.pidKey}:${ts}`;
+            map.set(key, { ...rec, ts, price, key });
+        };
+        a.forEach(add);
+        b.forEach(add);
+        return [...map.values()].sort((x, y) => x.ts - y.ts);
+    };
+    const REMOTE_URL_KEY = 'mp-price-remote-url';
+    const DEFAULT_REMOTE_BASE_URL = 'http://127.0.0.1:8765';
+    const normalizeBaseUrl = (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        let url = raw;
+        if (!/^[a-z]+:\/\//i.test(url)) url = `http://${url}`;
+        try {
+            const parsed = new URL(url);
+            const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/$/, '') : '';
+            return `${parsed.protocol}//${parsed.host}${path}`;
+        } catch (_) {
+            return '';
+        }
+    };
+    const getRemoteBaseUrl = () => {
+        try {
+            const stored = localStorage.getItem(REMOTE_URL_KEY);
+            const raw = stored || DEFAULT_REMOTE_BASE_URL;
+            return normalizeBaseUrl(raw) || DEFAULT_REMOTE_BASE_URL;
+        } catch (_) {
+            return DEFAULT_REMOTE_BASE_URL;
+        }
+    };
+    const setRemoteBaseUrl = (value) => {
+        const normalized = normalizeBaseUrl(value);
+        try {
+            if (normalized) localStorage.setItem(REMOTE_URL_KEY, normalized);
+            else localStorage.removeItem(REMOTE_URL_KEY);
+        } catch (_) {}
+        return normalized;
+    };
+    const remoteSync = (() => {
+        let baseUrl = getRemoteBaseUrl();
+        let lastPing = 0;
+        let reachable = false;
+        const refreshBaseUrl = () => {
+            const next = getRemoteBaseUrl();
+            if (next !== baseUrl) {
+                baseUrl = next;
+                lastPing = 0;
+                reachable = false;
+            }
+            return baseUrl;
+        };
+        const getBaseUrl = () => refreshBaseUrl();
+        const setBaseUrl = (next) => {
+            baseUrl = next || '';
+            lastPing = 0;
+            reachable = false;
+        };
+        const request = (method, path, body, timeout = 2000) => new Promise((resolve, reject) => {
+            const currentBase = refreshBaseUrl();
+            if (!currentBase) {
+                reject(new Error('missing base url'));
+                return;
+            }
+            const url = `${currentBase}${path}`;
+            const payload = body ? JSON.stringify(body) : null;
+            const onOk = (status, text) => {
+                if (status >= 200 && status < 300) {
+                    try { resolve(text ? JSON.parse(text) : null); } catch (_) { resolve(null); }
+                } else reject(new Error(`HTTP ${status}`));
+            };
+            if (typeof GM_xmlhttpRequest === 'function') {
+                GM_xmlhttpRequest({
+                    method,
+                    url,
+                    data: payload,
+                    headers: payload ? { 'Content-Type': 'application/json' } : {},
+                    timeout,
+                    onload: (res) => onOk(res.status, res.responseText),
+                    onerror: () => reject(new Error('network error')),
+                    ontimeout: () => reject(new Error('timeout')),
+                });
+                return;
+            }
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeout);
+            fetch(url, { method, body: payload, headers: payload ? { 'Content-Type': 'application/json' } : {}, signal: controller.signal })
+                .then((resp) => { clearTimeout(timer); if (!resp.ok) throw new Error(`HTTP ${resp.status}`); return resp.text().then((text) => ({ status: resp.status, text })); })
+                .then(({ status, text }) => onOk(status, text))
+                .catch((err) => { clearTimeout(timer); reject(err); });
+        });
+        const ping = async () => {
+            const now = Date.now();
+            if (!refreshBaseUrl()) return false;
+            if (now - lastPing < 10000) return reachable;
+            lastPing = now;
+            try {
+                await request('GET', '/ping', null, 800);
+                reachable = true;
+            } catch (_) {
+                reachable = false;
+            }
+            return reachable;
+        };
+        const push = async (rec) => {
+            if (!rec) return false;
+            const ok = await ping();
+            if (!ok) return false;
+            try {
+                await request('POST', '/api/price', rec, 2000);
+                return true;
+            } catch (_) {
+                reachable = false;
+                return false;
+            }
+        };
+        const fetchHistory = async (pidKey) => {
+            const ok = await ping();
+            if (!ok) return null;
+            try {
+                const res = await request('GET', `/api/history?pidKey=${encodeURIComponent(pidKey)}`, null, 2500);
+                return Array.isArray(res?.history) ? res.history : [];
+            } catch (_) {
+                reachable = false;
+                return null;
+            }
+        };
+        return { getBaseUrl, setBaseUrl, ping, push, fetchHistory };
+    })();
+    const initRemoteUrlMenu = () => {
+        if (typeof GM_registerMenuCommand !== 'function') return;
+        GM_registerMenuCommand('OZON/WB: Set server URL', () => {
+            const current = getRemoteBaseUrl();
+            const input = prompt('Price history server base URL', current);
+            if (input === null) return;
+            const trimmed = input.trim();
+            if (!trimmed) {
+                setRemoteBaseUrl('');
+                const fallback = getRemoteBaseUrl();
+                remoteSync.setBaseUrl(fallback);
+                alert(`Reset to default:\n${fallback}`);
+                return;
+            }
+            const normalized = setRemoteBaseUrl(trimmed);
+            if (!normalized) {
+                alert('Invalid URL.');
+                return;
+            }
+            remoteSync.setBaseUrl(normalized);
+            alert(`Saved:\n${normalized}`);
+        });
+        GM_registerMenuCommand('OZON/WB: Show server URL', () => {
+            alert(`Current server URL:\n${getRemoteBaseUrl()}`);
+        });
+        GM_registerMenuCommand('OZON/WB: Reset server URL', () => {
+            setRemoteBaseUrl('');
+            const fallback = getRemoteBaseUrl();
+            remoteSync.setBaseUrl(fallback);
+            alert(`Reset to default:\n${fallback}`);
+        });
+    };
     const recordPriceSnapshot = async (pidKey, pid, price, currency) => {
         if (!Number.isFinite(price)) return false;
         const now = Date.now();
-        const [last, prev] = await getLastPriceRecords(pidKey, 2).catch(() => []);
-        if (
-            last && prev &&
-            last.price === price && prev.price === price &&
-            (last.currency || '') === (currency || '') &&
-            (prev.currency || '') === (currency || '')
-        ) {
-            return await replacePriceRecordTime(last, now);
+        try {
+            const [last, prev] = await getLastPriceRecords(pidKey, 2).catch(() => []);
+            if (
+                last && prev &&
+                last.price === price && prev.price === price &&
+                (last.currency || '') === (currency || '') &&
+                (prev.currency || '') === (currency || '')
+            ) {
+                await replacePriceRecordTime(last, now);
+            } else {
+                await addPriceRecord(pidKey, pid, price, currency, now);
+            }
+        } catch (err) {
+            console.warn('Local price record failed:', err);
         }
-        await addPriceRecord(pidKey, pid, price, currency, now);
+        if (remoteSync.getBaseUrl()) {
+            remoteSync.push({ pidKey, pid, price, currency, ts: now }).catch(() => {});
+        }
         return true;
+    };
+    const getPriceHistory = async (pidKey) => {
+        const local = await getLocalPriceHistory(pidKey).catch(() => []);
+        let remote = null;
+        if (remoteSync.getBaseUrl()) {
+            remote = await remoteSync.fetchHistory(pidKey).catch(() => null);
+        }
+        const merged = mergePriceHistories(local, remote || []);
+        if (remote && remote.length) {
+            const localKeys = new Set(local.map((r) => r.key || `${r.pidKey}:${r.ts}`));
+            const missing = remote.filter((r) => !localKeys.has(r.key || `${r.pidKey}:${r.ts}`));
+            if (missing.length) {
+                const normalized = missing.map((r) => {
+                    const ts = Number(r.ts);
+                    return { ...r, ts, price: Number(r.price), key: r.key || `${r.pidKey}:${ts}` };
+                });
+                addPriceRecordsBulk(normalized).catch(() => {});
+            }
+        }
+        return merged;
     };
     const MIN_PRICE_CACHE_TTL = 60000;
     const minPriceCache = new Map();
@@ -338,40 +573,28 @@
         badge.classList.remove('mp-min-price-badge--empty');
     };
     const startPreviewMinPriceBadges = (opts) => {
-        let attempts = 0;
-        const maxAttempts = 8;
-        const poll = async () => {
-            attempts += 1;
+        let running = false;
+        const interval = opts.interval || opts.pollInterval || 4000;
+        const tick = async () => {
+            if (running) return;
+            running = true;
             try {
                 const cards = [...document.querySelectorAll(opts.cardSelector)];
                 for (const card of cards) {
                     const pid = opts.getPid(card);
                     if (!pid) continue;
                     const pidKey = `${opts.market}:${pid}`;
-                    if (opts.getPrice) {
-                        let priceInfo = opts.getPrice(card);
-                        if (priceInfo instanceof Promise) priceInfo = await priceInfo;
-                        if (priceInfo && Number.isFinite(priceInfo.price)) {
-                            try {
-                                await recordPriceSnapshot(pidKey, pid, priceInfo.price, priceInfo.currency);
-                                minPriceCache.delete(pidKey);
-                            } catch (e) {
-                                console.warn('Card price record failed:', e);
-                            }
-                        }
-                    }
                     const record = await getMinPriceRecordCached(pidKey);
                     renderMinPriceBadge(card, record);
                 }
             } catch (err) {
                 console.warn('Preview min price:', err);
             } finally {
-                if (attempts < maxAttempts && document.querySelectorAll(opts.cardSelector).length === 0) {
-                    setTimeout(poll, opts.pollInterval || 1200);
-                }
+                running = false;
             }
         };
-        poll();
+        const timer = setInterval(tick, interval);
+        tick();
     };
     const ensurePriceChartStyles = () => {
         addStyleOnce(`
@@ -558,7 +781,13 @@
                 const pid = await opts.getPid();
                 const priceInfo = opts.getPrice();
                 const anchor = opts.getAnchor ? opts.getAnchor() : null;
-                state.container = ensurePriceChartContainer(state.container, anchor, !anchor);
+                if (!anchor) {
+                    if (Date.now() > stopAt) {
+                        clearInterval(timer);
+                    }
+                    return;
+                }
+                state.container = ensurePriceChartContainer(state.container, anchor, false);
                 if (pid) state.pidKey = `${opts.market}:${pid}`;
                 if (!state.snapshot && pid && priceInfo && Number.isFinite(priceInfo.price)) {
                     await recordPriceSnapshot(state.pidKey, pid, priceInfo.price, priceInfo.currency);
@@ -684,13 +913,51 @@
 
             // description
             let desc = '—';
-            const dSec = await wait('#section-description', 1e4);
-            if (dSec) {
-                await smooth(dSec);
-                dSec.querySelector('button')?.click();
-                await sleep(300);
-                desc = dSec.innerText.replace(/^[Оо] (товаре|продукте):?/i, '').replace(/\n{2,}/g, '\n').trim() || '—';
+            const descSelector = '[data-widget="webDescription"], #section-description';
+            await wait(descSelector, 1e4);
+            // try to trigger lazy descriptions (Ozon sometimes loads extra widgets after scroll)
+            let lastDescCount = 0, idleDesc = 0;
+            while (idleDesc < 3) {
+                const cur = document.querySelectorAll(descSelector).length;
+                if (cur > lastDescCount) { lastDescCount = cur; idleDesc = 0; } else { idleDesc += 1; }
+                window.scrollBy(0, Math.round(window.innerHeight * 0.9));
+                await sleep(220);
             }
+            await smooth(document.querySelector(descSelector));
+            const descSections = [...document.querySelectorAll(descSelector)];
+            const seenSections = new Set();
+            const descParts = [];
+            const scrollElement = async (el) => {
+                if (!el) return;
+                const max = el.scrollHeight - el.clientHeight;
+                if (max <= 10) return;
+                const step = Math.max(120, Math.floor(el.clientHeight / 3));
+                for (let y = 0; y <= max; y += step) {
+                    el.scrollTo({ top: y, behavior: 'smooth' });
+                    await sleep(140);
+                }
+                el.scrollTo({ top: max, behavior: 'auto' });
+            };
+            for (const raw of descSections) {
+                const sec = raw.closest('[data-widget="webDescription"]') || raw;
+                if (!sec || seenSections.has(sec)) continue;
+                seenSections.add(sec);
+                await smooth(sec);
+                sec.querySelectorAll('button').forEach((btn) => {
+                    const t = btn.textContent?.toLowerCase() || '';
+                    if (/ещё|еще|показать|развернуть|подробнее|more|show/i.test(t)) btn.click();
+                });
+                await sleep(250);
+                const scrollables = [sec.querySelector('.pdp_p5a'), sec.querySelector('[style*="max-height"]'), sec];
+                for (const s of scrollables) await scrollElement(s);
+                const text = (sec.innerText || '')
+                    .replace(/^[Оо]\s*(товаре|продукте):?/i, '')
+                    .replace(/^\s*Описание\s*/i, '')
+                    .replace(/\n{3,}/g, '\n\n')
+                    .trim();
+                if (text) descParts.push(text);
+            }
+            if (descParts.length) desc = [...new Set(descParts)].join('\n\n');
 
             // characteristics
             let chars = '—';
@@ -825,6 +1092,7 @@
                 const rev = await loadReviews(100);
 
                 const out = [
+                    '=== CARD SUMMARY (OZON) ===',
                     `URL: ${info.url}`,
                     `Производитель: ${info.brand}`,
                     `Заголовок: ${info.title}`,
@@ -832,11 +1100,22 @@
                     `Цена: ${info.price}`,
                 ];
                 if (info.unit) out.push(`Цена за единицу: ${info.unit}`);
-                out.push('', 'Описание товара:', info.desc, '', 'Характеристики:', info.chars, '', rev.header, ...rev.items);
+                out.push(
+                    '',
+                    '=== ОПИСАНИЕ ===',
+                    info.desc,
+                    '',
+                    '=== ХАРАКТЕРИСТИКИ ===',
+                    ...toBullets(info.chars),
+                    '',
+                    '=== ОТЗЫВЫ ===',
+                    rev.header,
+                    ...rev.items.map((i) => `- ${i}`)
+                );
 
                 const txt = out.join('\n');
                 const name = slug(info.brand + ' ' + info.title) + '.txt';
-                GM_download({ url: 'data:text/plain;charset=utf-8,\uFEFF' + encodeURIComponent(txt), name, saveAs: false });
+                downloadTextFile(name, txt);
                 try { await navigator.clipboard.writeText(txt); } catch (_) {}
             } catch (err) {
                 console.error('Ozon exporter:', err);
@@ -999,6 +1278,7 @@
             }
 
             const lines = [
+                '=== CARD SUMMARY (WILDBERRIES) ===',
                 `URL: ${url}`,
                 `Производитель: ${brand}`,
                 `Заголовок: ${title}`,
@@ -1006,11 +1286,11 @@
                 `Цена: ${price}`,
                 `Рейтинг: ${rating} (${reviewsTotal} оценок)`,
                 '',
-                'Описание товара:',
+                '=== ОПИСАНИЕ ===',
                 descr,
                 '',
-                'Характеристики:',
-                chars,
+                '=== ХАРАКТЕРИСТИКИ ===',
+                ...toBullets(chars),
             ];
 
             // reviews
@@ -1034,7 +1314,7 @@
                     return res;
                 };
 
-                lines.push('', `Отзывы (выгружено ${revs.length}):`);
+                lines.push('', '=== ОТЗЫВЫ ===', `Отзывы (выгружено ${revs.length}):`);
                 if (revs.length) {
                     revs.forEach((el, idx) => {
                         const date = el.querySelector('.feedback__date')?.innerText.trim() || '—';
@@ -1055,14 +1335,14 @@
 
                         // new WB layout: bable badges for pros/cons
                         pickBables(el).forEach((t) => parts.push(t));
-                        lines.push(`Отзыв ${idx + 1} (${date}): ${parts.join('; ')}`);
+                        lines.push(`- Отзыв ${idx + 1} (${date}): ${parts.join('; ')}`);
                     });
                 } else lines.push('Нет отзывов');
             }
 
             const txt = lines.join('\n');
             const fname = slug(brand + ' ' + title) + '.txt';
-            GM_download({ url: 'data:text/plain;charset=utf-8,\uFEFF' + encodeURIComponent(txt), name: fname, saveAs: false });
+            downloadTextFile(fname, txt);
         }
 
         // Mount button near the title on WB (supports new hashed classes + old one)
@@ -1074,6 +1354,7 @@
     /* =========================================================
         ENTRY POINT
   ========================================================= */
+    initRemoteUrlMenu();
     const host = location.hostname;
     if (host.endsWith('ozon.ru') || host.endsWith('ozon.com')) {
         initOzon();
