@@ -3,7 +3,7 @@
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
 // @description  Гибкая панель для повторного поиска на других сайтах.
-// @version      0.6.3
+// @version      0.6.4
 // @match        *://*/*
 // @sandbox      DOM
 // @run-at       document-idle
@@ -279,6 +279,64 @@
         await gm.set(STORAGE_KEY, stringifySites(list));
     }
 
+    function makeBackupFileName() {
+        const date = new Date().toISOString().slice(0, 10);
+        return `multisearch-settings-${date}.json`;
+    }
+
+    function downloadTextFile(name, text) {
+        const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function parseSitesBackup(text) {
+        const parsed = JSON.parse(text);
+        const list = Array.isArray(parsed) ? parsed : parsed && parsed.sites;
+        const normalized = normalizeSites(list);
+        if (!normalized.length) {
+            throw new Error('Нет валидных записей');
+        }
+        return normalized;
+    }
+
+    async function exportSettings() {
+        const sites = normalizeSites(SITES);
+        downloadTextFile(makeBackupFileName(), stringifySites(sites));
+    }
+
+    async function importSettings() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json,.json';
+        input.style.display = 'none';
+        input.onchange = async () => {
+            const file = input.files && input.files[0];
+            input.remove();
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const imported = parseSitesBackup(text);
+                if (!confirm(`Импортировать ${imported.length} записей? Текущие настройки будут заменены.`)) return;
+                await saveSites(imported);
+                SITES = cloneSites(imported);
+                alert('Импортировано. Перезагрузите страницу, чтобы применить изменения.');
+            } catch (err) {
+                console.warn('MultiSearch: import failed', err);
+                alert('Не удалось импортировать настройки. Проверьте, что выбран JSON от Мультипоиска.');
+            }
+        };
+        document.body.appendChild(input);
+        input.click();
+    }
+
     function openSettings() {
         if (document.getElementById('msSettingsOverlay')) return;
 
@@ -293,6 +351,7 @@
 #msSettingsTable td:nth-child(3) input{min-width:260px}
 #msSettingsOverlay button{background:#e6e6e6;border:1px solid #bbb;border-radius:4px;padding:4px 10px;cursor:pointer}
 #msSettingsOverlay button:hover{background:#dcdcdc}
+#msSettingsActions{display:flex;justify-content:flex-end;gap:8px;margin:10px 0;flex-wrap:wrap}
         `;
         if (!document.getElementById('msSettingsCSS')) {
             const st = document.createElement('style');
@@ -333,11 +392,13 @@
         <tbody></tbody>
       </table>
 
-      <div style="text-align:right;margin:10px 0">
+      <div id="msSettingsActions">
+        <button id="msExport">Экспорт</button>
+        <button id="msImport">Импорт</button>
         <button id="msResetDefaults">Сбросить</button>
-        <button id="msAddRow" style="margin-left:8px">Добавить строку</button>
-        <button id="msCancel" style="margin-left:8px">Отмена</button>
-        <button id="msSave" style="margin-left:8px">Сохранить</button>
+        <button id="msAddRow">Добавить строку</button>
+        <button id="msCancel">Отмена</button>
+        <button id="msSave">Сохранить</button>
       </div>
 
       <ul style="font-size:0.85em;color:#555;margin:0;padding-left:18px">
@@ -373,20 +434,7 @@
         SITES.forEach((s) => addRow(s));
         addRow();
 
-        box.querySelector('#msAddRow').onclick = () => addRow();
-        box.querySelector('#msCancel').onclick = () => ov.remove();
-
-        box.querySelector('#msResetDefaults').onclick = async () => {
-            if (confirm('Сбросить все настройки к исходным?')) {
-                const defaults = cloneSites(DEFAULT_SITES);
-                await saveSites(defaults);
-                SITES = defaults;
-                alert('Сброшено. Перезагрузите страницу.');
-                ov.remove();
-            }
-        };
-
-        box.querySelector('#msSave').onclick = async () => {
+        const readRows = () => {
             const newArr = [];
             let bad = false;
             tbody.querySelectorAll('tr').forEach((tr) => {
@@ -406,8 +454,60 @@
                     icon: tr.querySelector('.c_icon').value.trim()
                 });
             });
+            return { bad, sites: normalizeSites(newArr) };
+        };
+
+        const replaceRows = (sites) => {
+            tbody.textContent = '';
+            sites.forEach((s) => addRow(s));
+            addRow();
+        };
+
+        box.querySelector('#msAddRow').onclick = () => addRow();
+        box.querySelector('#msCancel').onclick = () => ov.remove();
+        box.querySelector('#msExport').onclick = () => {
+            const { bad, sites } = readRows();
             if (bad) return alert('Заполните все поля с «*» или удалите пустые строки.');
-            const prepared = normalizeSites(newArr);
+            if (!sites.length) return alert('Нет валидных записей для экспорта.');
+            downloadTextFile(makeBackupFileName(), stringifySites(sites));
+        };
+        box.querySelector('#msImport').onclick = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json,.json';
+            input.style.display = 'none';
+            input.onchange = async () => {
+                const file = input.files && input.files[0];
+                input.remove();
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const imported = parseSitesBackup(text);
+                    if (!confirm(`Заменить строки в форме на ${imported.length} записей из файла?`)) return;
+                    replaceRows(imported);
+                    alert('Импортировано в форму. Нажмите «Сохранить», чтобы применить настройки.');
+                } catch (err) {
+                    console.warn('MultiSearch: form import failed', err);
+                    alert('Не удалось импортировать настройки. Проверьте, что выбран JSON от Мультипоиска.');
+                }
+            };
+            document.body.appendChild(input);
+            input.click();
+        };
+
+        box.querySelector('#msResetDefaults').onclick = async () => {
+            if (confirm('Сбросить все настройки к исходным?')) {
+                const defaults = cloneSites(DEFAULT_SITES);
+                await saveSites(defaults);
+                SITES = defaults;
+                alert('Сброшено. Перезагрузите страницу.');
+                ov.remove();
+            }
+        };
+
+        box.querySelector('#msSave').onclick = async () => {
+            const { bad, sites: prepared } = readRows();
+            if (bad) return alert('Заполните все поля с «*» или удалите пустые строки.');
             if (!prepared.length) return alert('Нет валидных записей для сохранения.');
             await saveSites(prepared);
             SITES = cloneSites(prepared);
@@ -421,6 +521,8 @@
     } else {
         window.multiSearchOpenSettings = openSettings;
     }
+    gm.registerMenu('⬇ Экспорт настроек Мультипоиска', exportSettings);
+    gm.registerMenu('⬆ Импорт настроек Мультипоиска', importSettings);
 
     const PANEL_CSS = `
 #multiSearchPanel {
@@ -654,9 +756,3 @@
 
     bootstrap();
 })();
-
-
-
-
-
-
