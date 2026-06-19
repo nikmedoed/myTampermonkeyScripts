@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Yandex Translate remove side content keep small spacer
+// @name         Yandex ad cleaner
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.2.1
-// @description  Hide Yandex Translate side block content but keep small layout spacer
+// @version      1.2.2
+// @description  Hide ad side content on Yandex services while keeping a small layout spacer
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
 // @run-at       document-start
