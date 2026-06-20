@@ -69,7 +69,7 @@
 
 # Яндекс
 
-## [Очистка рекламы](https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/yandex_cleaner.user.js)
+## [Очистка рекламы](https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/Yandex_cleaner.user.js)
 
 Скрипт убирает рекламное содержимое на сервисах Яндекса, но оставляет небольшой отступ, чтобы основной интерфейс не растягивался слишком резко.
 

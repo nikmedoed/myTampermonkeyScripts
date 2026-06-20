@@ -7,10 +7,10 @@
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
 // @run-at       document-start
-// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/yandex-cleaner.png
-// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/icons/yandex-cleaner.png
-// @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/yandex_cleaner.user.js
-// @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/yandex_cleaner.user.js
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
+// @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/Yandex_cleaner.user.js
+// @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/Yandex_cleaner.user.js
 // @grant        GM_addStyle
 // ==/UserScript==
 
