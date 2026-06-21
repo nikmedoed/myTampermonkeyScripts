@@ -2,7 +2,7 @@
 // @name         Yandex ad cleaner
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.2.2
+// @version      1.2.3
 // @description  Hide ad side content on Yandex services while keeping a small layout spacer
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
@@ -40,6 +40,10 @@
             display: none !important;
             visibility: hidden !important;
         }
+
+        .verticalMenu {
+            flex: initial !important;
+        }
     `);
 
     function applySpacer(sideBlock) {
@@ -64,6 +68,9 @@
 
     function cleanup() {
         document.querySelectorAll('.side-block').forEach(applySpacer);
+        document.querySelectorAll('.verticalMenu').forEach((verticalMenu) => {
+            verticalMenu.style.setProperty('flex', 'initial', 'important');
+        });
     }
 
     cleanup();
