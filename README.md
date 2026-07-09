@@ -13,6 +13,8 @@
   - [Имена треков открытого плейлиста в файл](#имена-треков-открытого-плейлиста-в-файл)
 - [Яндекс.Карты](#яндекскарты)
   - [Список точек в KML](#список-точек-в-kml)
+- [Microsoft Teams / SharePoint](#microsoft-teams--sharepoint)
+  - [Transcript TXT Downloader](#transcript-txt-downloader)
 - [YouTube](#youtube)
   - [Утилитки для YouTube](#утилитки-для-youtube)
   - [YouTube TXT](#youtube-txt)
@@ -101,6 +103,25 @@
 Для путешествий и приключений я привык собирать точки в Яндекс картах. Однако, не везде они способны построить маршрут, а перепад высот, как в Organic Maps, они вообще не учитывают. Но конечно, как и любой другой user-friendly сервис, Яндекс не стремится делиться с вами вашими данными.
 
 Этот скрипт сохранит все закладки из списка точек в KML файл, который понимают чуть ли не все открытые картографические сервисы. Во всяком случае, Organic Maps их легко считывает.
+
+# Microsoft Teams / SharePoint
+
+## [Transcript TXT Downloader](https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/sharepoint_trascript.user.js)
+
+Скрипт добавляет компактную кнопку **TXT** на страницы Microsoft Teams, SharePoint Stream и Microsoft Stream. Кнопка позволяет скачать расшифровку встречи через браузер в `.txt` файл, даже если в приложении Teams / SharePoint недоступна штатная кнопка скачивания транскрипта.
+
+Скрипт работает с открытой боковой панелью Transcript: прокручивает виртуализированный список реплик, собирает видимые строки с таймкодами и именами участников, а затем сохраняет текст локально.
+
+![Transcript TXT Downloader](icons/sharepoint-download.png)
+
+### Установка<!-- omit from toc -->
+
+1. Установите расширение [Tampermonkey®](https://www.tampermonkey.net/).
+2. Перейдите по [ссылке](https://github.com/nikmedoed/myTampermonkeyScripts/raw/main/sharepoint_trascript.user.js) и установите скрипт.
+
+### Ограничения<!-- omit from toc -->
+
+Скрипт не получает закрытые данные напрямую из Microsoft 365 и не обходит права доступа. Он скачивает только тот транскрипт, который уже отображается у вас в браузере. Перед нажатием **TXT** нужно открыть панель Transcript на странице записи.
 
 # YouTube
 
