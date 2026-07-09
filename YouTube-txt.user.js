@@ -2,7 +2,7 @@
 // @name         YouTube TXT
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.0.0
+// @version      1.0.10
 // @description  Скачивает расшифровку текущего YouTube-видео в аккуратный .txt файл одной кнопкой.
 // @match        https://www.youtube.com/watch*
 // @match        https://youtube.com/watch*
@@ -21,8 +21,10 @@
 
     const BUTTON_ID = "yt-txt-transcript-download-button";
     const WAIT_TIMEOUT_MS = 12000;
+    const PANEL_SEGMENTS_TIMEOUT_MS = 8000;
     const SHORT_DELAY_MS = 350;
     const BUTTON_TEXT = "TXT";
+    const SCRIPT_VERSION = "1.0.10";
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -133,6 +135,36 @@
         return true;
     }
 
+    function getElementTextForMatching(element) {
+        return normalizeSpaces(
+            [
+                element?.textContent,
+                element?.getAttribute?.("aria-label"),
+                element?.getAttribute?.("title"),
+                element?.querySelector?.("[aria-label]")?.getAttribute("aria-label"),
+                element?.querySelector?.("[title]")?.getAttribute("title")
+            ].filter(Boolean).join(" ")
+        ).toLowerCase();
+    }
+
+    function getClickableElement(element) {
+        return (
+            element?.closest?.("button, tp-yt-paper-button, [role='button']") ||
+            element?.querySelector?.("button, tp-yt-paper-button, [role='button']") ||
+            element
+        );
+    }
+
+    function pickHighestScore(candidates) {
+        return candidates.reduce((best, candidate) => {
+            if (!best || candidate.score > best.score) {
+                return candidate;
+            }
+
+            return best;
+        }, null);
+    }
+
     async function expandDescriptionIfPossible() {
         const expandButton = document.querySelector("ytd-watch-metadata ytd-text-inline-expander #expand");
 
@@ -158,66 +190,222 @@
         const sectionButton = transcriptSection?.querySelector("button, tp-yt-paper-button, ytd-button-renderer");
 
         if (sectionButton) {
-            return sectionButton.closest("button") || sectionButton;
+            return getClickableElement(sectionButton);
         }
 
         const candidates = Array.from(
-            document.querySelectorAll("button, tp-yt-paper-button, ytd-button-renderer")
+            document.querySelectorAll(
+                [
+                    "button",
+                    "tp-yt-paper-button",
+                    "ytd-button-renderer",
+                    "chip-view-model button",
+                    "[role='tab']",
+                    "[role='button']"
+                ].join(", ")
+            )
         );
 
-        return candidates.find((node) => {
-            const text = normalizeSpaces(
-                [
-                    node.textContent,
-                    node.getAttribute("aria-label"),
-                    node.getAttribute("title")
-                ].join(" ")
-            ).toLowerCase();
+        const best = pickHighestScore(candidates
+            .map((node) => {
+                const text = getElementTextForMatching(node);
+                let score = 0;
 
-            return (
-                text.includes("показать текст видео") ||
-                text.includes("текст видео") ||
-                text.includes("расшифровка") ||
-                text.includes("transcript") ||
-                text.includes("show transcript")
-            );
-        }) || null;
+                if (text.includes("показать текст видео") || text.includes("show transcript")) {
+                    score += 100;
+                }
+
+                if (text.includes("текст видео") || text.includes("расшифровка видео")) {
+                    score += 80;
+                }
+
+                if (text.includes("расшифровк") || text.includes("transcript")) {
+                    score += 60;
+                }
+
+                if (text.includes("поиск в расшифровке") || text.includes("search transcript")) {
+                    score -= 100;
+                }
+
+                if (text.includes("закрыть") || text.includes("close") || text.includes("комментарии") || text.includes("comments")) {
+                    score -= 100;
+                }
+
+                return {
+                    node: getClickableElement(node),
+                    score
+                };
+            })
+            .filter((candidate) => candidate.score > 0 && candidate.node && isVisible(candidate.node)));
+
+        return best?.node || null;
     }
 
     function findTranscriptPanel() {
-        const exactPanel = document.querySelector(
-            'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]'
-        );
+        const panels = Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"));
+        const best = pickHighestScore(panels
+            .map((panel) => ({
+                panel,
+                score: getTranscriptPanelScore(panel)
+            }))
+            .filter((candidate) => candidate.score > 0));
 
-        if (exactPanel) {
-            return exactPanel;
+        return best?.panel || null;
+    }
+
+    function findTranscriptPanelWithSegments() {
+        const panels = Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"));
+
+        const best = panels
+            .map((panel) => {
+                const segments = extractTranscriptSegments(panel).length;
+
+                return {
+                    panel,
+                    segments,
+                    score: (segments * 1000) + getTranscriptPanelScore(panel)
+                };
+            })
+            .filter((candidate) => candidate.segments > 0)
+            .reduce((currentBest, candidate) => {
+                if (!currentBest || candidate.score > currentBest.score) {
+                    return candidate;
+                }
+
+                return currentBest;
+            }, null);
+
+        return best?.panel || null;
+    }
+
+    function findTranscriptPanelWithStructuredSegments() {
+        const panels = Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"));
+
+        const best = panels
+            .map((panel) => {
+                const segments = extractVisibleTranscriptSegments(panel).length;
+
+                return {
+                    panel,
+                    segments,
+                    score: (segments * 1000) + getTranscriptPanelScore(panel)
+                };
+            })
+            .filter((candidate) => candidate.segments > 0)
+            .reduce((currentBest, candidate) => {
+                if (!currentBest || candidate.score > currentBest.score) {
+                    return candidate;
+                }
+
+                return currentBest;
+            }, null);
+
+        return best?.panel || null;
+    }
+
+    function findLikelyTranscriptPanel() {
+        const panelWithSegments = findTranscriptPanelWithSegments();
+
+        if (panelWithSegments) {
+            return panelWithSegments;
         }
 
-        return Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"))
-            .find((panel) => {
-                const text = normalizeSpaces(panel.textContent).toLowerCase();
+        return findTranscriptPanel();
+    }
 
-                return (
-                    text.includes("расшифровка видео") ||
-                    text.includes("поиск по видео") ||
-                    text.includes("transcript")
-                );
-            }) || null;
+    function getTranscriptPanelScore(panel) {
+        const text = normalizeSpaces(panel.textContent).toLowerCase();
+        const targetId = panel.getAttribute("target-id") || "";
+        let score = 0;
+
+        if (targetId === "engagement-panel-searchable-transcript") {
+            score += 20;
+        }
+
+        if (panel.getAttribute("visibility") === "ENGAGEMENT_PANEL_VISIBILITY_EXPANDED") {
+            score += 10;
+        }
+
+        if (panel.querySelector('[data-target-id="PAmodern_transcript_view"]')) {
+            score += 120;
+        }
+
+        if (panel.querySelector("transcript-segment-view-model, ytd-transcript-segment-renderer")) {
+            score += 100;
+        }
+
+        if (/\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(text)) {
+            score += 80;
+        }
+
+        if (text.includes("поиск в расшифровке") || text.includes("search transcript")) {
+            score += 60;
+        }
+
+        if (text.includes("хронология") && !text.includes("поиск в расшифровке") && !panel.querySelector("transcript-segment-view-model, ytd-transcript-segment-renderer")) {
+            score = 0;
+        }
+
+        if (text.includes("расшифровка видео") || text.includes("transcript")) {
+            score += 30;
+        }
+
+        if (text.length < 100 && score < 100) {
+            score = 0;
+        }
+
+        return score;
     }
 
     function extractVisibleTranscriptSegments(panel) {
-        const segmentNodes = Array.from(panel.querySelectorAll("ytd-transcript-segment-renderer"));
+        const segmentNodes = Array.from(
+            panel.querySelectorAll(
+                [
+                    "ytd-transcript-segment-renderer",
+                    "transcript-segment-view-model",
+                    ".ytwTranscriptSegmentViewModelHost"
+                ].join(", ")
+            )
+        );
 
         const rows = [];
 
         for (const segmentNode of segmentNodes) {
             const timestamp = normalizeSpaces(
-                segmentNode.querySelector(".segment-timestamp")?.textContent || ""
+                segmentNode.querySelector(
+                    [
+                        ".segment-timestamp",
+                        ".ytwTranscriptSegmentViewModelTimestamp",
+                        "[class*='Timestamp'][aria-hidden='true']"
+                    ].join(", ")
+                )?.textContent || ""
             );
 
-            const text = normalizeSpaces(
-                segmentNode.querySelector(".segment-text")?.textContent || ""
+            let text = normalizeSpaces(
+                segmentNode.querySelector(
+                    [
+                        ".segment-text",
+                        ".ytAttributedStringHost[role='text']",
+                        "span[role='text']",
+                        "[role='text']"
+                    ].join(", ")
+                )?.textContent || ""
             );
+
+            if (!text) {
+                const clone = segmentNode.cloneNode(true);
+
+                clone.querySelectorAll(
+                    [
+                        ".segment-timestamp",
+                        ".ytwTranscriptSegmentViewModelTimestamp",
+                        ".ytwTranscriptSegmentViewModelTimestampA11yLabel",
+                        "[class*='Timestamp']"
+                    ].join(", ")
+                ).forEach((node) => node.remove());
+
+                text = normalizeSpaces(clone.textContent || "");
+            }
 
             if (!text) {
                 continue;
@@ -233,41 +421,184 @@
         return rows;
     }
 
+    function extractTranscriptSegmentsFromPanelText(panel) {
+        const rawText = normalizeSpaces(panel?.textContent || "");
+        const markerRegex = /(?:^|\s)(\d{1,2}:\d{2}(?::\d{2})?)\s+/g;
+        const matches = Array.from(rawText.matchAll(markerRegex));
+
+        if (matches.length === 0) {
+            return [];
+        }
+
+        const rows = [];
+
+        for (let i = 0; i < matches.length; i++) {
+            const match = matches[i];
+            const timestamp = match[1];
+            const textStart = match.index + match[0].length;
+            const textEnd = i + 1 < matches.length ? matches[i + 1].index : rawText.length;
+            const text = cleanPanelTextSegment(rawText.slice(textStart, textEnd));
+
+            if (!text) {
+                continue;
+            }
+
+            rows.push({
+                key: `${timestamp}|||${text}`,
+                timestamp,
+                text
+            });
+        }
+
+        return rows;
+    }
+
+    function cleanPanelTextSegment(text) {
+        return normalizeSpaces(text)
+            .replace(
+                /^(?:(?:\d+\s+)?(?:час(?:а|ов)?|hour(?:s)?)\s*)?(?:(?:\d+\s+)?(?:минут(?:а|ы)?|minute(?:s)?)\s*)?(?:\d+\s+)?(?:секунд(?:а|ы)?|second(?:s)?)\s+/i,
+                ""
+            )
+            .replace(/\s+(?:Показывать комментарии к текущему моменту видео|Show comments at the current video moment).*$/i, "")
+            .trim();
+    }
+
+    function timestampToSeconds(timestamp) {
+        const parts = String(timestamp || "").split(":").map((part) => Number(part));
+
+        if (parts.some((part) => !Number.isFinite(part))) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+
+        return parts.reduce((total, part) => total * 60 + part, 0);
+    }
+
+    function decodeHtmlEntities(text) {
+        const namedEntities = {
+            amp: "&",
+            lt: "<",
+            gt: ">",
+            quot: '"',
+            apos: "'",
+            nbsp: " "
+        };
+
+        return String(text || "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, body) => {
+            const lowerBody = body.toLowerCase();
+
+            if (lowerBody.startsWith("#x")) {
+                return String.fromCodePoint(parseInt(lowerBody.slice(2), 16));
+            }
+
+            if (lowerBody.startsWith("#")) {
+                return String.fromCodePoint(parseInt(lowerBody.slice(1), 10));
+            }
+
+            return Object.prototype.hasOwnProperty.call(namedEntities, lowerBody)
+                ? namedEntities[lowerBody]
+                : entity;
+        });
+    }
+
+    function extractTranscriptSegments(panel) {
+        const structuredRows = extractVisibleTranscriptSegments(panel);
+
+        if (structuredRows.length > 0) {
+            return structuredRows;
+        }
+
+        if (!isTranscriptTextPanel(panel)) {
+            return [];
+        }
+
+        return extractTranscriptSegmentsFromPanelText(panel);
+    }
+
+    function isTranscriptTextPanel(panel) {
+        const text = normalizeSpaces(panel?.textContent || "").toLowerCase();
+
+        return Boolean(
+            panel?.querySelector('[data-target-id="PAmodern_transcript_view"], transcript-segment-view-model, ytd-transcript-segment-renderer, .ytwTranscriptSegmentViewModelHost') ||
+            text.includes("поиск в расшифровке") ||
+            text.includes("search transcript")
+        );
+    }
+
     function findScrollableParent(element) {
         let node = element;
+        let bestCandidate = null;
 
         while (node && node !== document.body && node !== document.documentElement) {
             const style = window.getComputedStyle(node);
-            const canScroll = /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 10;
+            const hasScrollableContent = node.scrollHeight > node.clientHeight + 10;
+            const hasScrollableOverflow = /(auto|scroll|overlay)/.test(style.overflowY);
 
-            if (canScroll) {
+            if (hasScrollableContent && hasScrollableOverflow) {
                 return node;
+            }
+
+            if (hasScrollableContent && !bestCandidate) {
+                bestCandidate = node;
             }
 
             node = node.parentElement;
         }
 
-        return null;
+        return bestCandidate;
+    }
+
+    function findTranscriptScrollContainer(panel) {
+        const anchors = Array.from(
+            panel.querySelectorAll(
+                [
+                    "#segments-container",
+                    ".ytSectionListRendererContents",
+                    "ytd-transcript-segment-list-renderer",
+                    "yt-section-list-renderer[data-target-id='PAmodern_transcript_view']",
+                    "[data-target-id='PAmodern_transcript_view']",
+                    "transcript-segment-view-model",
+                    "ytd-transcript-segment-renderer"
+                ].join(", ")
+            )
+        );
+
+        for (const anchor of anchors) {
+            const scrollable = findScrollableParent(anchor);
+
+            if (scrollable && panel.contains(scrollable)) {
+                return scrollable;
+            }
+        }
+
+        return findScrollableParent(panel);
+    }
+
+    function nudgeScroll(scrollable) {
+        scrollable.dispatchEvent(new Event("scroll", { bubbles: true }));
+        scrollable.dispatchEvent(new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            deltaY: Math.max(300, Math.floor(scrollable.clientHeight * 0.85))
+        }));
     }
 
     async function collectTranscriptFromPanel(panel) {
         await waitFor(() => {
-            const count = panel.querySelectorAll("ytd-transcript-segment-renderer .segment-text").length;
+            const count = extractTranscriptSegments(panel).length;
             const error = panel.querySelector("#error-container:not([hidden])");
             return count > 0 || error;
         }, WAIT_TIMEOUT_MS);
 
-        const segmentsContainer = panel.querySelector("#segments-container");
-        const scrollable = segmentsContainer ? findScrollableParent(segmentsContainer) : null;
+        const scrollable = findTranscriptScrollContainer(panel);
 
         const collected = new Map();
 
         async function collectOnce() {
-            const rows = extractVisibleTranscriptSegments(panel);
+            const rows = extractTranscriptSegments(panel);
 
             for (const row of rows) {
                 if (!collected.has(row.key)) {
-                    collected.set(row.key, row.text);
+                    collected.set(row.key, row);
                 }
             }
         }
@@ -288,8 +619,9 @@
                     scrollable.scrollHeight,
                     scrollable.scrollTop + Math.max(250, Math.floor(scrollable.clientHeight * 0.85))
                 );
+                nudgeScroll(scrollable);
 
-                await sleep(120);
+                await sleep(180);
                 await collectOnce();
 
                 const isAtBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 5;
@@ -306,8 +638,27 @@
             }
         }
 
-        const parts = Array.from(collected.values());
+        const parts = Array.from(collected.values())
+            .sort((a, b) => timestampToSeconds(a.timestamp) - timestampToSeconds(b.timestamp))
+            .map((row) => row.text);
         return normalizeTranscriptText(parts);
+    }
+
+    function getTranscriptDebugInfo(panel) {
+        return {
+            version: SCRIPT_VERSION,
+            panels: document.querySelectorAll("ytd-engagement-panel-section-list-renderer").length,
+            panelScores: Array.from(document.querySelectorAll("ytd-engagement-panel-section-list-renderer"))
+                .map((candidatePanel) => ({
+                    score: getTranscriptPanelScore(candidatePanel),
+                    chars: normalizeSpaces(candidatePanel.textContent || "").length,
+                    sample: normalizeSpaces(candidatePanel.textContent || "").slice(0, 80)
+                })),
+            structuredSegments: panel ? extractVisibleTranscriptSegments(panel).length : 0,
+            textSegments: panel ? extractTranscriptSegmentsFromPanelText(panel).length : 0,
+            panelTextLength: normalizeSpaces(panel?.textContent || "").length,
+            panelSample: normalizeSpaces(panel?.textContent || "").slice(0, 300)
+        };
     }
 
     function closeTranscriptPanel(panel) {
@@ -334,21 +685,53 @@
     async function getTranscriptFromYouTubePanel() {
         await expandDescriptionIfPossible();
 
+        const alreadyOpenPanel = findTranscriptPanelWithStructuredSegments() || findLikelyTranscriptPanel();
+
+        if (alreadyOpenPanel) {
+            const hasTranscriptContent = extractTranscriptSegments(alreadyOpenPanel).length > 0;
+            const alreadyOpenText = hasTranscriptContent ? await collectTranscriptFromPanel(alreadyOpenPanel) : "";
+
+            if (alreadyOpenText) {
+                closeTranscriptPanel(alreadyOpenPanel);
+                return alreadyOpenText;
+            }
+        }
+
         const transcriptButton = await waitFor(() => findTranscriptButton(), 5000);
 
         if (!transcriptButton) {
+            console.warn("[YT TXT] Transcript button not found", getTranscriptDebugInfo(alreadyOpenPanel));
             return "";
         }
 
         smartClick(transcriptButton);
 
-        const panel = await waitFor(() => findTranscriptPanel(), WAIT_TIMEOUT_MS);
+        let panel = await waitFor(() => findTranscriptPanelWithStructuredSegments(), PANEL_SEGMENTS_TIMEOUT_MS);
 
         if (!panel) {
+            panel = await waitFor(() => findLikelyTranscriptPanel(), 2500);
+        }
+
+        if (!panel) {
+            console.warn("[YT TXT] Transcript panel not found", getTranscriptDebugInfo(null));
             return "";
         }
 
-        const text = await collectTranscriptFromPanel(panel);
+        let text = await collectTranscriptFromPanel(panel);
+
+        if (!text) {
+            await sleep(500);
+            const freshPanel = findTranscriptPanelWithStructuredSegments() || findLikelyTranscriptPanel();
+
+            if (freshPanel) {
+                panel = freshPanel;
+                text = await collectTranscriptFromPanel(panel);
+            }
+        }
+
+        if (!text) {
+            console.warn("[YT TXT] Transcript panel found but no text extracted", getTranscriptDebugInfo(panel));
+        }
         closeTranscriptPanel(panel);
 
         return text;
@@ -423,7 +806,13 @@
             throw new Error(`Caption request failed: ${response.status}`);
         }
 
-        return response.json();
+        const responseText = await response.text();
+
+        if (!responseText.trim()) {
+            throw new Error("Caption JSON3 response is empty");
+        }
+
+        return JSON.parse(responseText);
     }
 
     function extractTextFromJson3(data) {
@@ -459,11 +848,23 @@
         }
 
         const xmlText = await response.text();
-        const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+        const parts = [];
+        const textNodeRegex = /<text\b[^>]*>([\s\S]*?)<\/text>/gi;
+        let match;
 
-        return normalizeTranscriptText(
-            Array.from(xml.querySelectorAll("text")).map((node) => node.textContent || "")
-        );
+        while ((match = textNodeRegex.exec(xmlText)) !== null) {
+            parts.push(decodeHtmlEntities(match[1]));
+        }
+
+        if (parts.length === 0) {
+            console.warn("[YT TXT] Caption XML response has no text nodes", {
+                version: SCRIPT_VERSION,
+                length: xmlText.length,
+                sample: xmlText.slice(0, 300)
+            });
+        }
+
+        return normalizeTranscriptText(parts);
     }
 
     async function getTranscriptFromCaptionTracks() {
@@ -495,13 +896,13 @@
     }
 
     async function getTranscriptText() {
-        let text = await getTranscriptFromYouTubePanel();
+        let text = await getTranscriptFromCaptionTracks();
 
         if (text) {
             return text;
         }
 
-        text = await getTranscriptFromCaptionTracks();
+        text = await getTranscriptFromYouTubePanel();
 
         if (text) {
             return text;
@@ -529,7 +930,14 @@
             const transcriptText = await getTranscriptText();
 
             if (!transcriptText) {
-                alert("Текст видео не найден. Возможно, у ролика нет доступной расшифровки/субтитров.");
+                const panel = findTranscriptPanel();
+                const debug = getTranscriptDebugInfo(panel);
+                alert(
+                    `YT TXT ${SCRIPT_VERSION}: текст видео не найден.\n` +
+                    `panels=${debug.panels}, structured=${debug.structuredSegments}, text=${debug.textSegments}, chars=${debug.panelTextLength}\n` +
+                    "Подробности записаны в консоль DevTools."
+                );
+                console.warn("[YT TXT] No transcript text", debug);
                 return;
             }
 
