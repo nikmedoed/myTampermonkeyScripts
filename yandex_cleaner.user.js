@@ -1,11 +1,16 @@
 // ==UserScript==
-// @name         Yandex Translate remove side content keep small spacer
-// @namespace    https://translate.yandex.ru/
-// @version      1.2.0
-// @description  Hide Yandex Translate side block content but keep small layout spacer
+// @name         Yandex ad cleaner
+// @namespace    https://nikmedoed.com
+// @author       https://nikmedoed.com
+// @version      1.2.3
+// @description  Hide ad side content on Yandex services while keeping a small layout spacer
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
 // @run-at       document-start
+// @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
+// @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
+// @downloadURL  https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/Yandex_cleaner.user.js
+// @updateURL    https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/Yandex_cleaner.user.js
 // @grant        GM_addStyle
 // ==/UserScript==
 
@@ -35,6 +40,10 @@
             display: none !important;
             visibility: hidden !important;
         }
+
+        .verticalMenu {
+            flex: initial !important;
+        }
     `);
 
     function applySpacer(sideBlock) {
@@ -59,6 +68,9 @@
 
     function cleanup() {
         document.querySelectorAll('.side-block').forEach(applySpacer);
+        document.querySelectorAll('.verticalMenu').forEach((verticalMenu) => {
+            verticalMenu.style.setProperty('flex', 'initial', 'important');
+        });
     }
 
     cleanup();
