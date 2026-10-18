@@ -2,10 +2,14 @@
 // @name         Yandex ad cleaner
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.2.3
-// @description  Hide ad side content on Yandex services while keeping a small layout spacer
+// @version      1.3.0
+// @description  Hide ads in Yandex Maps cards and keep a small side spacer in Yandex Translate
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
+// @match        https://yandex.ru/maps/*
+// @match        https://yandex.com/maps/*
+// @match        https://maps.yandex.ru/*
+// @match        https://maps.yandex.com/*
 // @run-at       document-start
 // @icon64       https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
 // @icon         https://github.com/nikmedoed/myTampermonkeyScripts/raw/refs/heads/main/icons/yandex-cleaner.png
@@ -16,6 +20,46 @@
 
 (function () {
     'use strict';
+
+    const isMaps = location.hostname.startsWith('maps.') || location.pathname.startsWith('/maps/');
+
+    if (isMaps) {
+        // The ad's outer slot remains accessible even when its nested shadow root is closed.
+        // Match the slot format rather than the rotating class names or a particular ad ID.
+        const sectionSelector = '.sidebar-container .toponym-card-view__section';
+        const slotSelector = '[id*="R-I-"]';
+        const slotIdPattern = /R-I-\d+-\d+(?:$|[-_])/i;
+        const hiddenAttribute = 'data-yandex-cleaner-ad';
+
+        GM_addStyle(`
+            ${sectionSelector}[${hiddenAttribute}] {
+                display: none !important;
+            }
+        `);
+
+        function cleanupMapAds() {
+            document.querySelectorAll(sectionSelector).forEach((section) => {
+                const hasAdSlot = Array.from(section.querySelectorAll(slotSelector))
+                    .some((slot) => slotIdPattern.test(slot.id));
+
+                // Restore sections if Maps reuses their DOM for ordinary card content.
+                if (hasAdSlot !== section.hasAttribute(hiddenAttribute)) {
+                    section.toggleAttribute(hiddenAttribute, hasAdSlot);
+                }
+            });
+        }
+
+        const mapObserver = new MutationObserver(cleanupMapAds);
+        // Observe the document itself: it also works before documentElement exists.
+        mapObserver.observe(document, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['id', 'class'],
+        });
+        cleanupMapAds();
+        return;
+    }
 
     const SIDE_BLOCK_WIDTH = '40px';
 
