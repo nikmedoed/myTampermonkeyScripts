@@ -2,8 +2,8 @@
 // @name         Yandex ad cleaner
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.3.0
-// @description  Hide ads in Yandex Maps cards and keep a small side spacer in Yandex Translate
+// @version      1.3.1
+// @description  Hide ads in Yandex Maps and keep a small side spacer in Yandex Translate
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
 // @match        https://yandex.ru/maps/*
@@ -27,17 +27,23 @@
         // The ad's outer slot remains accessible even when its nested shadow root is closed.
         // Match the slot format rather than the rotating class names or a particular ad ID.
         const sectionSelector = '.sidebar-container .toponym-card-view__section';
-        const slotSelector = '[id*="R-I-"]';
+        const slotSelector = '[id*="R-I-" i]';
+        const homeSlotSelector = `.home-panel-content-view__body ${slotSelector}`;
         const slotIdPattern = /R-I-\d+-\d+(?:$|[-_])/i;
         const hiddenAttribute = 'data-yandex-cleaner-ad';
 
         GM_addStyle(`
-            ${sectionSelector}[${hiddenAttribute}] {
+            ${sectionSelector}[${hiddenAttribute}],
+            ${homeSlotSelector}[${hiddenAttribute}] {
                 display: none !important;
             }
         `);
 
         function cleanupMapAds() {
+            document.querySelectorAll(homeSlotSelector).forEach((slot) => {
+                slot.toggleAttribute(hiddenAttribute, slotIdPattern.test(slot.id));
+            });
+
             document.querySelectorAll(sectionSelector).forEach((section) => {
                 const hasAdSlot = Array.from(section.querySelectorAll(slotSelector))
                     .some((slot) => slotIdPattern.test(slot.id));
