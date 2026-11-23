@@ -2,7 +2,7 @@
 // @name         Yandex ad cleaner
 // @namespace    https://nikmedoed.com
 // @author       https://nikmedoed.com
-// @version      1.3.1
+// @version      1.3.2
 // @description  Hide ads in Yandex Maps and keep a small side spacer in Yandex Translate
 // @match        https://translate.yandex.ru/*
 // @match        https://translate.yandex.com/*
@@ -26,32 +26,31 @@
     if (isMaps) {
         // The ad's outer slot remains accessible even when its nested shadow root is closed.
         // Match the slot format rather than the rotating class names or a particular ad ID.
-        const sectionSelector = '.sidebar-container .toponym-card-view__section';
-        const slotSelector = '[id*="R-I-" i]';
-        const homeSlotSelector = `.home-panel-content-view__body ${slotSelector}`;
         const slotIdPattern = /R-I-\d+-\d+(?:$|[-_])/i;
-        const hiddenAttribute = 'data-yandex-cleaner-ad';
+        const adAttribute = 'data-yandex-cleaner-ad';
+        const markedSlot = `[${adAttribute}]`;
+        const slotSelector = `[id*="R-I-" i], ${markedSlot}`;
 
         GM_addStyle(`
-            ${sectionSelector}[${hiddenAttribute}],
-            ${homeSlotSelector}[${hiddenAttribute}] {
+            ${markedSlot},
+            .sidebar-container .toponym-card-view__section:has(${markedSlot}),
+            div[style*="--color-bg-additional"][style*="--color-bg-primary"]:has(
+                > div[data-chunk]:only-child
+                > div[aria-hidden="true"][tabindex="-1"]:only-child
+                > div:only-child
+                > ${markedSlot}:only-child
+            ),
+            [data-name="partial-container"][data-container-type="smart-tile-container"]:has(
+                > [data-name="banner-layout"] [data-new-adtune]
+            ) {
                 display: none !important;
             }
         `);
 
         function cleanupMapAds() {
-            document.querySelectorAll(homeSlotSelector).forEach((slot) => {
-                slot.toggleAttribute(hiddenAttribute, slotIdPattern.test(slot.id));
-            });
-
-            document.querySelectorAll(sectionSelector).forEach((section) => {
-                const hasAdSlot = Array.from(section.querySelectorAll(slotSelector))
-                    .some((slot) => slotIdPattern.test(slot.id));
-
-                // Restore sections if Maps reuses their DOM for ordinary card content.
-                if (hasAdSlot !== section.hasAttribute(hiddenAttribute)) {
-                    section.toggleAttribute(hiddenAttribute, hasAdSlot);
-                }
+            document.querySelectorAll(slotSelector).forEach((slot) => {
+                // Clear the marker if Maps reuses the element with a different ID.
+                slot.toggleAttribute(adAttribute, slotIdPattern.test(slot.id));
             });
         }
 
@@ -61,7 +60,7 @@
             childList: true,
             subtree: true,
             attributes: true,
-            attributeFilter: ['id', 'class'],
+            attributeFilter: ['id'],
         });
         cleanupMapAds();
         return;
